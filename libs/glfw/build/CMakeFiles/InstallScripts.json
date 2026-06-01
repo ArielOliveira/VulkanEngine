@@ -1,0 +1,11 @@
+{
+	"InstallScripts" : 
+	[
+		"C:/glfw_source/build/cmake_install.cmake",
+		"C:/glfw_source/build/src/cmake_install.cmake",
+		"C:/glfw_source/build/examples/cmake_install.cmake",
+		"C:/glfw_source/build/tests/cmake_install.cmake",
+		"C:/glfw_source/build/docs/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
