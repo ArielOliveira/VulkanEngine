@@ -1,6 +1,6 @@
-#include <swapChainManager.hpp>
+#include <swapChain.hpp>
 
-SwapChainManager::SwapChainManager(const SurfaceKHR &surface, const PhysicalDevice &physicalDevice, const Device &device) {
+SwapChain::SwapChain(const SurfaceKHR &surface, const PhysicalDevice &physicalDevice, const Device &device) {
     SurfaceCapabilitiesKHR surfaceCapabilities   = physicalDevice.getSurfaceCapabilitiesKHR(*surface);
     vector<SurfaceFormatKHR> availableFormats    = physicalDevice.getSurfaceFormatsKHR(*surface);
     vector<PresentModeKHR> availablePresentModes = physicalDevice.getSurfacePresentModesKHR(*surface);
@@ -45,7 +45,7 @@ SwapChainManager::SwapChainManager(const SurfaceKHR &surface, const PhysicalDevi
     }
 }
 
-SwapChainManager::SwapChainManager(SwapChainManager &&other) noexcept 
+SwapChain::SwapChain(SwapChain &&other) noexcept 
     : swapChain(move(other.swapChain))
     , swapChainImages(move(other.swapChainImages))
     , swapChainImageViews(move(other.swapChainImageViews))
@@ -53,11 +53,11 @@ SwapChainManager::SwapChainManager(SwapChainManager &&other) noexcept
     , swapChainExtent(move(other.swapChainExtent))
 {}
 
-SwapChainManager::SwapChainManager(std::nullptr_t) noexcept {}
+SwapChain::SwapChain(std::nullptr_t) noexcept {}
 
-SwapChainManager::~SwapChainManager() {}
+SwapChain::~SwapChain() {}
 
-SwapChainManager& SwapChainManager::operator=(SwapChainManager&& other) noexcept {
+SwapChain& SwapChain::operator=(SwapChain&& other) noexcept {
     if (this != &other) {
         swap(swapChain, other.swapChain);
         swap(swapChainImages, other.swapChainImages);
@@ -69,7 +69,7 @@ SwapChainManager& SwapChainManager::operator=(SwapChainManager&& other) noexcept
     return *this;
 }
 
-SwapChainManager& SwapChainManager::operator=(std::nullptr_t) noexcept {
+SwapChain& SwapChain::operator=(std::nullptr_t) noexcept {
     swapChain = nullptr;
     swapChainImages.clear();
     swapChainImageViews.clear();
@@ -77,7 +77,7 @@ SwapChainManager& SwapChainManager::operator=(std::nullptr_t) noexcept {
     return *this;
 }
 
-SurfaceFormatKHR SwapChainManager::chooseSwapSurfaceFormat(const vector<SurfaceFormatKHR> &availableFormats) {
+SurfaceFormatKHR SwapChain::chooseSwapSurfaceFormat(const vector<SurfaceFormatKHR> &availableFormats) {
     assert(!availableFormats.empty());
 
     const auto formatIt = std::ranges::find_if(
@@ -88,7 +88,7 @@ SurfaceFormatKHR SwapChainManager::chooseSwapSurfaceFormat(const vector<SurfaceF
     return formatIt != availableFormats.end() ? *formatIt : availableFormats[0];
 }
 
-PresentModeKHR SwapChainManager::chooseSwapPresentMode(const vector<PresentModeKHR> &availablePresentModes) {
+PresentModeKHR SwapChain::chooseSwapPresentMode(const vector<PresentModeKHR> &availablePresentModes) {
     assert(std::ranges::any_of(availablePresentModes, [](auto presentMode) { return presentMode == vk::PresentModeKHR::eFifo; }));
     
     return std::ranges::any_of(availablePresentModes,
@@ -97,7 +97,7 @@ PresentModeKHR SwapChainManager::chooseSwapPresentMode(const vector<PresentModeK
                                PresentModeKHR::eFifo;
 }
 
-uint32_t SwapChainManager::chooseSwapMinImageCount(const SurfaceCapabilitiesKHR &capabilities) {
+uint32_t SwapChain::chooseSwapMinImageCount(const SurfaceCapabilitiesKHR &capabilities) {
     auto minImageCount = std::max(3u, capabilities.minImageCount);
     
     if ((0 < capabilities.maxImageCount) && (capabilities.maxImageCount < minImageCount)) 
@@ -106,7 +106,7 @@ uint32_t SwapChainManager::chooseSwapMinImageCount(const SurfaceCapabilitiesKHR 
     return minImageCount;
 }
 
-Extent2D SwapChainManager::chooseSwapExtent(const SurfaceCapabilitiesKHR &capabilities) {
+Extent2D SwapChain::chooseSwapExtent(const SurfaceCapabilitiesKHR &capabilities) {
     // If currentExtent is not set to the max value of uint32_t, it means
     // the current window resolution is already fixed?
     if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max())
@@ -122,6 +122,22 @@ Extent2D SwapChainManager::chooseSwapExtent(const SurfaceCapabilitiesKHR &capabi
     };
 }
 
-const SwapchainKHR& SwapChainManager::getSwapChain() const { return swapChain; }
-const SurfaceFormatKHR& SwapChainManager::getSwapChainSurfaceFormat() const { return swapChainSurfaceFormat; }
-const Extent2D& SwapChainManager::getSwapChainExtent() const { return swapChainExtent; }
+const SwapchainKHR& SwapChain::getInstance() const & { return swapChain; }
+const SurfaceFormatKHR& SwapChain::getSurfaceFormat() const { return swapChainSurfaceFormat; }
+const Extent2D& SwapChain::getExtent() const { return swapChainExtent; }
+
+const vk::Image& SwapChain::getImage(uint32_t index) const {
+    if (index < 0 || index > swapChainImages.size()-1)
+        throw std::runtime_error("Invalid Swapchain image index!");
+
+    return swapChainImages[index];
+}
+
+const vk::ImageView& SwapChain::getImageView(uint32_t index) const {
+    if (index < 0 || index > swapChainImageViews.size()-1)
+        throw std::runtime_error("Invalid Swapchain image index!");
+
+    return *swapChainImageViews[index];
+}
+
+const vk::ResultValue<uint32_t> SwapChain::acquireNextImage(uint64_t timeout, const Semaphore &semaphore, const Fence &fence) const { return swapChain.acquireNextImage(timeout, semaphore, fence); }

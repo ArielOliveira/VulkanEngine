@@ -8,6 +8,8 @@ GraphicsPipeline::GraphicsPipeline(const Device &device, const Extent2D &swapCha
 
     auto shaderCode = FileHelper::readFile(shaderAbsolutePath, ios::ate | ios::binary);
 
+    std::cout << "Shader size in bytes: " << shaderCode.size() << '\n';
+
     vk::ShaderModuleCreateInfo createInfo {
         .codeSize = shaderCode.size() * sizeof(char), 
         .pCode    = reinterpret_cast<const uint32_t*>(shaderCode.data())
@@ -133,6 +135,7 @@ GraphicsPipeline::~GraphicsPipeline() {}
 
 GraphicsPipeline& GraphicsPipeline::operator=(GraphicsPipeline &&other) noexcept {
     if (this != &other) {
+        swap(pipeline, other.pipeline);
         swap(pipelineLayout, other.pipelineLayout);
     }
 
@@ -140,8 +143,13 @@ GraphicsPipeline& GraphicsPipeline::operator=(GraphicsPipeline &&other) noexcept
 }
 
 GraphicsPipeline& GraphicsPipeline::operator=(std::nullptr_t) noexcept {
+    pipeline.clear();
+    pipeline = nullptr;
+
     pipelineLayout.clear();
     pipelineLayout = nullptr;
 
     return *this;
 }
+
+const vk::raii::Pipeline& GraphicsPipeline::getInstance() const & { return pipeline; }

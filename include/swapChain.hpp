@@ -17,35 +17,41 @@ using vk::raii::PhysicalDevice;
 using vk::raii::Device;
 using vk::raii::SurfaceKHR;
 using vk::raii::SwapchainKHR;
+using vk::raii::Semaphore;
+using vk::raii::Fence;
 using vk::SurfaceFormatKHR;
 using vk::SurfaceCapabilitiesKHR;
 using vk::Extent2D;
 using vk::PresentModeKHR;
 
-class SwapChainManager {
+class SwapChain {
     public:
-        SwapChainManager() = delete;
+        SwapChain() = delete;
 
-        SwapChainManager(const SwapChainManager&) = delete;
-        SwapChainManager(SwapChainManager&&) noexcept; 
+        SwapChain(const SwapChain&) = delete;
+        SwapChain(SwapChain&&) noexcept; 
 
-        SwapChainManager(const SurfaceKHR& surface, const PhysicalDevice &physicalDevice, const Device &device);
-        SwapChainManager(std::nullptr_t) noexcept;
+        SwapChain(const SurfaceKHR& surface, const PhysicalDevice &physicalDevice, const Device &device);
+        SwapChain(std::nullptr_t) noexcept;
 
-        ~SwapChainManager();
+        ~SwapChain();
 
-        SwapChainManager& operator=(const SwapChainManager&) = delete;
-        SwapChainManager& operator=(SwapChainManager&& other) noexcept;
-        SwapChainManager& operator=(std::nullptr_t) noexcept;
+        SwapChain& operator=(const SwapChain&) = delete;
+        SwapChain& operator=(SwapChain&& other) noexcept;
+        SwapChain& operator=(std::nullptr_t) noexcept;
 
         static SurfaceFormatKHR chooseSwapSurfaceFormat(const vector<SurfaceFormatKHR> &availableFormats);
         static PresentModeKHR   chooseSwapPresentMode(const vector<PresentModeKHR> &availablePresentModes);
         static uint32_t         chooseSwapMinImageCount(const SurfaceCapabilitiesKHR &capabilities);
         static Extent2D         chooseSwapExtent(const SurfaceCapabilitiesKHR &capabilities);
 
-        const SwapchainKHR&     getSwapChain()              const;
-        const SurfaceFormatKHR& getSwapChainSurfaceFormat() const;
-        const Extent2D&         getSwapChainExtent()        const;
+        const SwapchainKHR&     getInstance()                const&;
+        const SurfaceFormatKHR& getSurfaceFormat()           const;
+        const Extent2D&         getExtent()                  const;
+        const vk::Image&        getImage(uint32_t index)     const;
+        const vk::ImageView&    getImageView(uint32_t index) const;
+
+        const vk::ResultValue<uint32_t> acquireNextImage(uint64_t timeout, const Semaphore &semaphore, const Fence &fence) const;
     
     private:
         SwapchainKHR                swapChain = nullptr;

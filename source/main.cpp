@@ -13,6 +13,7 @@ int main(int argc, char** args) {
 
     while(!application.shouldClose()) {
         application.update();
+        graphics.drawFrame();
     }
 
     return 0;

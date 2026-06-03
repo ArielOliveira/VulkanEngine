@@ -29,7 +29,8 @@ class GraphicsPipeline {
         GraphicsPipeline& operator=(std::nullptr_t) noexcept;
 
         const char* shaderRelativePath = "./spirv/";
-    
+
+        const vk::raii::Pipeline& getInstance()const &;
     private:
         vk::raii::Pipeline pipeline   = nullptr;
         PipelineLayout pipelineLayout = nullptr;

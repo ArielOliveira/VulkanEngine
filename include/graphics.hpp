@@ -4,7 +4,7 @@
 #include <application.hpp>
 #include <version.hpp>
 #include <config.hpp>
-#include <swapChainManager.hpp>
+#include <swapChain.hpp>
 #include <graphicsPipeline.hpp>
 
 #include <iostream>
@@ -23,6 +23,12 @@ using vk::raii::Queue;
 using vk::raii::SurfaceKHR;
 using vk::raii::CommandPool;
 using vk::raii::CommandBuffer;
+using vk::raii::Semaphore;
+using vk::raii::Fence;
+
+using vk::ImageLayout;
+using vk::AccessFlags2;
+using vk::PipelineStageFlags2;
 
 class Graphics {
     public:
@@ -35,6 +41,8 @@ class Graphics {
 
         Graphics& operator=(const Graphics&) = delete;
         Graphics& operator=(Graphics&&) noexcept = delete;
+
+        void drawFrame();
     private:
         Graphics();
 
@@ -43,17 +51,32 @@ class Graphics {
         void createLogicalDevice();
         void createSurface();
         void createCommandPool();
+        void createCommandBuffer();
+        void createSyncObjects();
+        void recordCommandBuffer(uint32_t imageIndex);
+
+        void transitionImageLayout(uint32_t imageIndex, 
+                                  ImageLayout oldL, ImageLayout newL, 
+                                  AccessFlags2 srcAccessMask, AccessFlags2 dstAccessMask,
+                                  PipelineStageFlags2 srcStageMask, PipelineStageFlags2 dstStageMask);
 
         const bool isDeviceSuitable(const PhysicalDevice &physicalDevice) const;
 
         Context context;
-        Instance instance                 = nullptr;
-        PhysicalDevice physicalDevice     = nullptr;
-        Device device                     = nullptr;
-        Queue queue                       = nullptr; // Graphics and presentation queue (for now)
-        SurfaceKHR surface                = nullptr;
-        SwapChainManager swapChainManager = nullptr;
-        GraphicsPipeline graphicsPipeline = nullptr;
+        Instance instance                  = nullptr;
+        PhysicalDevice physicalDevice      = nullptr;
+        Device device                      = nullptr;
+        Queue queue                        = nullptr; // Graphics and presentation queue (for now)
+        SurfaceKHR surface                 = nullptr;
+        SwapChain swapChain                = nullptr;
+        GraphicsPipeline graphicsPipeline  = nullptr;
+        CommandPool commandPool            = nullptr;
+        CommandBuffer commandBuffer        = nullptr;
+        Semaphore presentCompleteSemaphore = nullptr;
+        Semaphore renderFinishedSemaphore  = nullptr;
+        Fence drawFence                    = nullptr;
+
+        uint32_t queueIndex               = ~0;
 
         const std::vector<char const*> validationLayers = {
             "VK_LAYER_KHRONOS_validation"
