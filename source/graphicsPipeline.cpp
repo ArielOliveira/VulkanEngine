@@ -125,22 +125,8 @@ GraphicsPipeline::GraphicsPipeline(const Device &device, const Extent2D &swapCha
     pipeline = vk::raii::Pipeline(device, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
 }
 
-GraphicsPipeline::GraphicsPipeline(GraphicsPipeline &&other) noexcept 
-    : pipelineLayout(move(other.pipelineLayout))
-{}
-
 GraphicsPipeline::GraphicsPipeline(std::nullptr_t) noexcept {}
-
 GraphicsPipeline::~GraphicsPipeline() {}
-
-GraphicsPipeline& GraphicsPipeline::operator=(GraphicsPipeline &&other) noexcept {
-    if (this != &other) {
-        swap(pipeline, other.pipeline);
-        swap(pipelineLayout, other.pipelineLayout);
-    }
-
-    return *this;
-}
 
 GraphicsPipeline& GraphicsPipeline::operator=(std::nullptr_t) noexcept {
     pipeline.clear();

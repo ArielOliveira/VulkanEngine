@@ -29,15 +29,16 @@ class SwapChain {
         SwapChain() = delete;
 
         SwapChain(const SwapChain&) = delete;
-        SwapChain(SwapChain&&) noexcept; 
+        SwapChain(SwapChain&&) noexcept = default; 
 
         SwapChain(const SurfaceKHR& surface, const PhysicalDevice &physicalDevice, const Device &device);
+        SwapChain(SwapChain& old, const SurfaceKHR& surface, const PhysicalDevice &physicalDevice, const Device &device);
         SwapChain(std::nullptr_t) noexcept;
 
         ~SwapChain();
 
         SwapChain& operator=(const SwapChain&) = delete;
-        SwapChain& operator=(SwapChain&& other) noexcept;
+        SwapChain& operator=(SwapChain&& other) noexcept = default;
         SwapChain& operator=(std::nullptr_t) noexcept;
 
         static SurfaceFormatKHR chooseSwapSurfaceFormat(const vector<SurfaceFormatKHR> &availableFormats);
@@ -50,8 +51,10 @@ class SwapChain {
         const Extent2D&         getExtent()                  const;
         const vk::Image&        getImage(uint32_t index)     const;
         const vk::ImageView&    getImageView(uint32_t index) const;
+        const size_t getImageCount() const;
 
         const vk::ResultValue<uint32_t> acquireNextImage(uint64_t timeout, const Semaphore &semaphore, const Fence &fence) const;
+        
     
     private:
         SwapchainKHR                swapChain = nullptr;
@@ -59,6 +62,9 @@ class SwapChain {
         vector<vk::raii::ImageView> swapChainImageViews;
         SurfaceFormatKHR            swapChainSurfaceFormat;
         Extent2D                    swapChainExtent;
+
+        void cleanUp();
+        void buildSwapChain(const SurfaceKHR &surface, const PhysicalDevice &physicalDevice, const Device &device);
 };
 
 #endif

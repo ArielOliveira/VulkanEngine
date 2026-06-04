@@ -21,11 +21,11 @@ class GraphicsPipeline {
 
         GraphicsPipeline(const Device &device, const Extent2D &swapChain, const SurfaceFormatKHR &swapChainSurfaceFormat);
         GraphicsPipeline(const GraphicsPipeline&) = delete;
-        GraphicsPipeline(GraphicsPipeline &&other) noexcept;
+        GraphicsPipeline(GraphicsPipeline &&other) noexcept = default;
         GraphicsPipeline(std::nullptr_t) noexcept;
 
         GraphicsPipeline& operator=(const GraphicsPipeline&) = delete;
-        GraphicsPipeline& operator=(GraphicsPipeline &&other) noexcept;
+        GraphicsPipeline& operator=(GraphicsPipeline &&other) noexcept = default;
         GraphicsPipeline& operator=(std::nullptr_t) noexcept;
 
         const char* shaderRelativePath = "./spirv/";

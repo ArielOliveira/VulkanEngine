@@ -1,6 +1,8 @@
 #ifndef GRAPHICS_HPP
 #define GRAPHICS_HPP
 
+#define VULKAN_HPP_HANDLE_ERROR_OUT_OF_DATE_AS_SUCCESS
+
 #include <application.hpp>
 #include <version.hpp>
 #include <config.hpp>
@@ -30,6 +32,8 @@ using vk::ImageLayout;
 using vk::AccessFlags2;
 using vk::PipelineStageFlags2;
 
+constexpr int MAX_FRAMES_IN_FLIGHT = 2;
+
 class Graphics {
     public:
         static Graphics& getInstance();
@@ -43,6 +47,8 @@ class Graphics {
         Graphics& operator=(Graphics&&) noexcept = delete;
 
         void drawFrame();
+
+        const Device& getDevice() const &;
     private:
         Graphics();
 
@@ -51,7 +57,7 @@ class Graphics {
         void createLogicalDevice();
         void createSurface();
         void createCommandPool();
-        void createCommandBuffer();
+        void createCommandBuffers();
         void createSyncObjects();
         void recordCommandBuffer(uint32_t imageIndex);
 
@@ -63,20 +69,22 @@ class Graphics {
         const bool isDeviceSuitable(const PhysicalDevice &physicalDevice) const;
 
         Context context;
-        Instance instance                  = nullptr;
-        PhysicalDevice physicalDevice      = nullptr;
-        Device device                      = nullptr;
-        Queue queue                        = nullptr; // Graphics and presentation queue (for now)
-        SurfaceKHR surface                 = nullptr;
-        SwapChain swapChain                = nullptr;
-        GraphicsPipeline graphicsPipeline  = nullptr;
-        CommandPool commandPool            = nullptr;
-        CommandBuffer commandBuffer        = nullptr;
-        Semaphore presentCompleteSemaphore = nullptr;
-        Semaphore renderFinishedSemaphore  = nullptr;
-        Fence drawFence                    = nullptr;
+        Instance instance                           = nullptr;
+        PhysicalDevice physicalDevice               = nullptr;
+        Device device                               = nullptr;
+        Queue queue                                 = nullptr; // Graphics and presentation queue (for now)
+        SurfaceKHR surface                          = nullptr;
+        SwapChain swapChain                         = nullptr;
+        GraphicsPipeline graphicsPipeline           = nullptr;
+        CommandPool commandPool                     = nullptr;
+
+        vector<CommandBuffer> commandBuffers;
+        vector<Semaphore> presentCompleteSemaphores;
+        vector<Semaphore> renderFinishedSemaphores;
+        vector<Fence> inFlightFences;
 
         uint32_t queueIndex               = ~0;
+        uint32_t frameIndex               =  0;
 
         const std::vector<char const*> validationLayers = {
             "VK_LAYER_KHRONOS_validation"

@@ -17,12 +17,16 @@ Application::Application() {
     title += parameters.title; title += ' '; title += VULKAN_ENGINE_VERSION_STRING; title += '-'; title += BUILD_TYPE;
     
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 
     window = glfwCreateWindow(parameters.width, parameters.height, title.c_str(), nullptr, nullptr);
     if (!window) throw std::runtime_error("Failed to create window!");
+    windowDirty = false;
+    windowState = WindowState::WINDOW_ON_FOCUS;
 
+    glfwSetWindowUserPointer(window, this); // Do I need it?
     glfwSetKeyCallback(window, key_callback);
+    glfwSetFramebufferSizeCallback(window, framebuffer_resize_callback);
 
     updateListeners = vector<void(*)()>();
 }
@@ -42,6 +46,18 @@ void Application::error_callback(const int error, const char* description) { cer
 void Application::key_callback(GLFWwindow* window, const int key, const int scancode, const int action, const int mods) {
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
         glfwSetWindowShouldClose(window, GLFW_TRUE);
+}
+
+void Application::framebuffer_resize_callback(GLFWwindow* window, int width, int height) {
+    // Is this still needed in my case?
+    // auto app = reinterpret_cast<Application*>(glfwGetWindowUserPointer(window));
+    
+    getInstance().windowDirty = true;
+
+    if (width <= 0 || height <= 0)
+        getInstance().windowState = WindowState::WINDOW_NULL;
+    else 
+        getInstance().windowState = WindowState::WINDOW_ON_FOCUS;
 }
 
 void Application::update_callback() const {
@@ -70,3 +86,4 @@ const bool Application::shouldClose() const { return glfwWindowShouldClose(windo
 
 vector<const char*> Application::getRequiredExtensions(uint32_t* count) const { auto extensions = glfwGetRequiredInstanceExtensions(count); return vector(extensions, extensions+(*count)); }
 const char*  Application::name() const { return glfwGetWindowTitle(window); }
+const WindowState Application::getWindowState() const { return windowState; }

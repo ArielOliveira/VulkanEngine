@@ -16,5 +16,7 @@ int main(int argc, char** args) {
         graphics.drawFrame();
     }
 
+    graphics.getDevice().waitIdle();
+
     return 0;
 }

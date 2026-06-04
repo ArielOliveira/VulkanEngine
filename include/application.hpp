@@ -39,6 +39,9 @@ class Application {
         
         vector<const char*> getRequiredExtensions(uint32_t* count) const;
         const char* name() const;
+
+        const bool isWindowDirty() const;
+        const WindowState getWindowState() const;
     private:
         Application();        
 
@@ -46,8 +49,12 @@ class Application {
 
         vector<void(*)()> updateListeners;
 
+        bool windowDirty = true;
+        WindowState windowState = WindowState::WINDOW_NULL;
+
         static void error_callback(const int error, const char* description);
         static void key_callback(GLFWwindow* window, const int key, const int scancode, const int action, const int mods);
+        static void framebuffer_resize_callback(GLFWwindow* window, int width, int height);
         void update_callback() const;
 };
 

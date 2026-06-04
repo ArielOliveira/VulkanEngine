@@ -1,6 +1,15 @@
 #include <swapChain.hpp>
 
 SwapChain::SwapChain(const SurfaceKHR &surface, const PhysicalDevice &physicalDevice, const Device &device) {
+    buildSwapChain(surface, physicalDevice, device);
+}
+
+SwapChain::SwapChain(SwapChain& old, const SurfaceKHR& surface, const PhysicalDevice &physicalDevice, const Device &device) {
+    old.cleanUp();
+    buildSwapChain(surface, physicalDevice, device);
+}
+
+void SwapChain::buildSwapChain(const SurfaceKHR &surface, const PhysicalDevice &physicalDevice, const Device &device) {
     SurfaceCapabilitiesKHR surfaceCapabilities   = physicalDevice.getSurfaceCapabilitiesKHR(*surface);
     vector<SurfaceFormatKHR> availableFormats    = physicalDevice.getSurfaceFormatsKHR(*surface);
     vector<PresentModeKHR> availablePresentModes = physicalDevice.getSurfacePresentModesKHR(*surface);
@@ -45,36 +54,23 @@ SwapChain::SwapChain(const SurfaceKHR &surface, const PhysicalDevice &physicalDe
     }
 }
 
-SwapChain::SwapChain(SwapChain &&other) noexcept 
-    : swapChain(move(other.swapChain))
-    , swapChainImages(move(other.swapChainImages))
-    , swapChainImageViews(move(other.swapChainImageViews))
-    , swapChainSurfaceFormat(move(other.swapChainSurfaceFormat))
-    , swapChainExtent(move(other.swapChainExtent))
-{}
-
 SwapChain::SwapChain(std::nullptr_t) noexcept {}
 
-SwapChain::~SwapChain() {}
-
-SwapChain& SwapChain::operator=(SwapChain&& other) noexcept {
-    if (this != &other) {
-        swap(swapChain, other.swapChain);
-        swap(swapChainImages, other.swapChainImages);
-        swap(swapChainImageViews, other.swapChainImageViews );
-        swap(swapChainSurfaceFormat, other.swapChainSurfaceFormat);
-        swap(swapChainExtent, other.swapChainExtent);
-    }
-    
-    return *this;
+SwapChain::~SwapChain() {
+    cleanUp();
 }
 
 SwapChain& SwapChain::operator=(std::nullptr_t) noexcept {
-    swapChain = nullptr;
-    swapChainImages.clear();
-    swapChainImageViews.clear();
+    cleanUp();
 
     return *this;
+}
+
+void SwapChain::cleanUp() {
+    swapChain.clear();
+    swapChainImages.clear();
+    swapChainImageViews.clear();
+    swapChain = nullptr;
 }
 
 SurfaceFormatKHR SwapChain::chooseSwapSurfaceFormat(const vector<SurfaceFormatKHR> &availableFormats) {
@@ -125,6 +121,7 @@ Extent2D SwapChain::chooseSwapExtent(const SurfaceCapabilitiesKHR &capabilities)
 const SwapchainKHR& SwapChain::getInstance() const & { return swapChain; }
 const SurfaceFormatKHR& SwapChain::getSurfaceFormat() const { return swapChainSurfaceFormat; }
 const Extent2D& SwapChain::getExtent() const { return swapChainExtent; }
+const size_t SwapChain::getImageCount() const { return swapChainImages.size(); }
 
 const vk::Image& SwapChain::getImage(uint32_t index) const {
     if (index < 0 || index > swapChainImages.size()-1)

@@ -21,7 +21,7 @@ Graphics::Graphics() {
     graphicsPipeline = GraphicsPipeline(device, swapChain.getExtent(), swapChain.getSurfaceFormat());
 
     createCommandPool();
-    createCommandBuffer();
+    createCommandBuffers();
     createSyncObjects();
 }
 
@@ -253,18 +253,30 @@ void Graphics::createCommandPool() {
     commandPool = CommandPool(device, poolInfo);
 }
 
-void Graphics::createCommandBuffer() {
+void Graphics::createCommandBuffers() {
     vk::CommandBufferAllocateInfo allocInfo {
         .commandPool        = commandPool,
         .level              = vk::CommandBufferLevel::ePrimary,
-        .commandBufferCount = 1
+        .commandBufferCount = MAX_FRAMES_IN_FLIGHT
     };
 
-    commandBuffer = std::move(vk::raii::CommandBuffers(device, allocInfo).front());
+    commandBuffers = vk::raii::CommandBuffers(device, allocInfo);
+}
+
+void Graphics::createSyncObjects() {
+    assert(presentCompleteSemaphores.empty() && renderFinishedSemaphores.empty() && inFlightFences.empty());
+
+    for (size_t i = 0; i < swapChain.getImageCount(); i++)
+        renderFinishedSemaphores.emplace_back(device, vk::SemaphoreCreateInfo());
+    
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        presentCompleteSemaphores.emplace_back(device, vk::SemaphoreCreateInfo());
+        inFlightFences.emplace_back(device, vk::FenceCreateInfo{.flags = vk::FenceCreateFlagBits::eSignaled});
+    }
 }
 
 void Graphics::recordCommandBuffer(uint32_t imageIndex) {
-    commandBuffer.begin({});
+    commandBuffers[frameIndex].begin({});
 
     transitionImageLayout(
         imageIndex,
@@ -293,12 +305,12 @@ void Graphics::recordCommandBuffer(uint32_t imageIndex) {
         .pColorAttachments    = &attachmentInfo
     };
 
-    commandBuffer.beginRendering(renderingInfo);
-    commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipeline.getInstance());
-    commandBuffer.setViewport(0, vk::Viewport(0.0f, 0.0f, static_cast<float>(swapChain.getExtent().width), static_cast<float>(swapChain.getExtent().height), 0.0f, 1.0f));
-    commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapChain.getExtent()));
-    commandBuffer.draw(3, 1, 0, 0);
-    commandBuffer.endRendering();
+    commandBuffers[frameIndex].beginRendering(renderingInfo);
+    commandBuffers[frameIndex].bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipeline.getInstance());
+    commandBuffers[frameIndex].setViewport(0, vk::Viewport(0.0f, 0.0f, static_cast<float>(swapChain.getExtent().width), static_cast<float>(swapChain.getExtent().height), 0.0f, 1.0f));
+    commandBuffers[frameIndex].setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapChain.getExtent()));
+    commandBuffers[frameIndex].draw(3, 1, 0, 0);
+    commandBuffers[frameIndex].endRendering();
 
     transitionImageLayout(
         imageIndex,
@@ -310,13 +322,14 @@ void Graphics::recordCommandBuffer(uint32_t imageIndex) {
         vk::PipelineStageFlagBits2::eBottomOfPipe
     );
 
-    commandBuffer.end();
+    commandBuffers[frameIndex].end();
 }
 
-void Graphics::transitionImageLayout(uint32_t imageIndex, 
-                          ImageLayout oldL, ImageLayout newL, 
-                          AccessFlags2 srcAccessMask, AccessFlags2 dstAccessMask,
-                          PipelineStageFlags2 srcStageMask, PipelineStageFlags2 dstStageMask) {
+void Graphics::transitionImageLayout(
+                        uint32_t imageIndex, 
+                        ImageLayout oldL, ImageLayout newL, 
+                        AccessFlags2 srcAccessMask, AccessFlags2 dstAccessMask,
+                        PipelineStageFlags2 srcStageMask, PipelineStageFlags2 dstStageMask) {
     vk::ImageMemoryBarrier2 barrier = {
         .srcStageMask           = srcStageMask,
         .srcAccessMask          = srcAccessMask,
@@ -342,24 +355,34 @@ void Graphics::transitionImageLayout(uint32_t imageIndex,
         .pImageMemoryBarriers    = &barrier
     };
 
-    commandBuffer.pipelineBarrier2(dependencyInfo);
-}
-
-void Graphics::createSyncObjects() {
-    presentCompleteSemaphore = Semaphore(device, vk::SemaphoreCreateInfo());
-    renderFinishedSemaphore  = Semaphore(device, vk::SemaphoreCreateInfo());
-    drawFence                = Fence(device, { .flags = vk::FenceCreateFlagBits::eSignaled});
+    commandBuffers[frameIndex].pipelineBarrier2(dependencyInfo);
 }
 
 void Graphics::drawFrame() {
-    vk::Result fenceResult = device.waitForFences(*drawFence, vk::True, UINT64_MAX);
+    vk::Result fenceResult = device.waitForFences(*inFlightFences[frameIndex], vk::True, UINT64_MAX);
     
     if (fenceResult != vk::Result::eSuccess) 
         throw std::runtime_error("failed to wait for fence!");
-
-    device.resetFences(*drawFence);
     
-    auto [result, imageIndex] = swapChain.acquireNextImage(UINT64_MAX, presentCompleteSemaphore, nullptr);
+    auto [result, imageIndex] = swapChain.acquireNextImage(UINT64_MAX, presentCompleteSemaphores[frameIndex], nullptr);
+
+    if (result == vk::Result::eErrorOutOfDateKHR) {
+        while(Application::getInstance().getWindowState() == WindowState::WINDOW_NULL) { glfwWaitEvents(); }
+
+        std::cout << "Swap chain is out of date. Recreating..." << '\n';
+        
+        device.waitIdle(); // Wait until resource is no longer being used before recreating
+        swapChain = SwapChain(swapChain, surface, physicalDevice, device);
+        
+        return;
+    }
+
+    if (result != vk::Result::eSuccess && result != vk::Result::eSuboptimalKHR) {
+        assert(result == vk::Result::eTimeout || result == vk::Result::eNotReady);
+        throw std::runtime_error("failed to acquire swap chain image!");
+    }
+
+    device.resetFences(*inFlightFences[frameIndex]);
 
     recordCommandBuffer(imageIndex);
 
@@ -369,19 +392,19 @@ void Graphics::drawFrame() {
     
     const vk::SubmitInfo submitInfo {
         .waitSemaphoreCount   = 1,
-        .pWaitSemaphores      = &*presentCompleteSemaphore,
+        .pWaitSemaphores      = &*presentCompleteSemaphores[frameIndex],
         .pWaitDstStageMask    = &waitDestinationStageMask,
         .commandBufferCount   = 1,
-        .pCommandBuffers      = &*commandBuffer,
+        .pCommandBuffers      = &*commandBuffers[frameIndex],
         .signalSemaphoreCount = 1,
-        .pSignalSemaphores    = &*renderFinishedSemaphore
+        .pSignalSemaphores    = &*renderFinishedSemaphores[frameIndex]
     };
 
-    queue.submit(submitInfo, *drawFence);
+    queue.submit(submitInfo, *inFlightFences[frameIndex]);
 
     const vk::PresentInfoKHR presentInfo {
         .waitSemaphoreCount = 1,
-        .pWaitSemaphores    = &*renderFinishedSemaphore,
+        .pWaitSemaphores    = &*renderFinishedSemaphores[frameIndex],
         .swapchainCount     = 1,
         .pSwapchains        = &*swapChain.getInstance(),
         .pImageIndices      = &imageIndex
@@ -390,13 +413,21 @@ void Graphics::drawFrame() {
     result = queue.presentKHR(presentInfo);
 
     switch (result) {
-		case vk::Result::eSuccess:
-			break;
+		case vk::Result::eSuccess: break;
 		case vk::Result::eSuboptimalKHR:
-			std::cout << "vk::Queue::presentKHR returned vk::Result::eSuboptimalKHR !\n";
+        case vk::Result::eErrorOutOfDateKHR:
+            while(Application::getInstance().getWindowState() == WindowState::WINDOW_NULL) { glfwWaitEvents(); }
+
+			std::cout << "vk::Queue::presentKHR returned eSuboptimal or eErrorOutOfDate. Reacreating swap chain... !\n";
+
+            swapChain = SwapChain(swapChain, surface, physicalDevice, device);
 			break;
 		default:
             std::cout << "Queue returned an unexpected result !\n";
 			break;        // an unexpected result is returned!
 	}
+
+    frameIndex = (frameIndex + 1) % MAX_FRAMES_IN_FLIGHT;
 }
+
+const Device& Graphics::getDevice() const & { return device; }
