@@ -31,12 +31,14 @@ list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/shaders")
 include(LibraryNames)
 include(ShaderCompiler)
 
+find_package(glm CONFIG REQUIRED)
+
 add_subdirectory(${LIB_DIR}/glfw)
 add_subdirectory(${LIB_DIR}/vulkan)
 
 add_executable(${PROJECT_NAME} ${ALL_SOURCES})
 
-target_link_libraries(${PROJECT_NAME} PRIVATE glfw Vulkan::cppm)
+target_link_libraries(${PROJECT_NAME} PRIVATE glfw Vulkan::cppm glm::glm)
 target_compile_definitions(${PROJECT_NAME} PRIVATE CMAKE_EXPORT_COMPILE_COMMANDS=1)
 
 compile_slang_shaders(SHADERS ${SHADERS_DIR} "${PROJECT_BINARY_DIR}/$<CONFIG>")

@@ -4,7 +4,8 @@
             "name": "Win32",
             "includePath": [
                 "${workspaceFolder}/**",
-                "${VULKAN_SDK}/Include/**"
+                "${VULKAN_SDK}/Include/**",
+                "${GLM_LIB}/include/**"
             ],
             "defines": [
                 "_DEBUG",

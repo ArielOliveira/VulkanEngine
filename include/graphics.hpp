@@ -27,6 +27,8 @@ using vk::raii::CommandPool;
 using vk::raii::CommandBuffer;
 using vk::raii::Semaphore;
 using vk::raii::Fence;
+using vk::raii::Buffer;
+using vk::raii::DeviceMemory;
 
 using vk::ImageLayout;
 using vk::AccessFlags2;
@@ -59,6 +61,7 @@ class Graphics {
         void createCommandPool();
         void createCommandBuffers();
         void createSyncObjects();
+        void createVertexBuffer();
         void recordCommandBuffer(uint32_t imageIndex);
 
         void transitionImageLayout(uint32_t imageIndex, 
@@ -67,6 +70,7 @@ class Graphics {
                                   PipelineStageFlags2 srcStageMask, PipelineStageFlags2 dstStageMask);
 
         const bool isDeviceSuitable(const PhysicalDevice &physicalDevice) const;
+        uint32_t findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFlags properties);
 
         Context context;
         Instance instance                           = nullptr;
@@ -77,6 +81,8 @@ class Graphics {
         SwapChain swapChain                         = nullptr;
         GraphicsPipeline graphicsPipeline           = nullptr;
         CommandPool commandPool                     = nullptr;
+        Buffer vertexBuffer                         = nullptr;
+        DeviceMemory vertexBufferMemory             = nullptr;
 
         vector<CommandBuffer> commandBuffers;
         vector<Semaphore> presentCompleteSemaphores;

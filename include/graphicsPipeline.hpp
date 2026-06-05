@@ -1,6 +1,7 @@
 #ifndef GRAPHICS_PIPELINE_HPP
 #define GRAPHICS_PIPELINE_HPP
 
+#include <graphicsModels.hpp>
 #include <fileHelper.hpp>
 
 #include <vulkan\vulkan_raii.hpp>
