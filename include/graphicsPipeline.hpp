@@ -12,6 +12,7 @@ using std::swap;
 using vk::raii::Device;
 using vk::raii::ShaderModule;
 using vk::raii::PipelineLayout;
+using vk::raii::DescriptorSetLayout;
 using vk::SurfaceFormatKHR;
 using vk::Extent2D;
 
@@ -31,11 +32,13 @@ class GraphicsPipeline {
 
         const char* shaderRelativePath = "./spirv/";
 
-        const vk::raii::Pipeline& getInstance()const &;
+        const vk::raii::Pipeline&  getInstance() const &;
+        const PipelineLayout&      getPipelineLayout() const &;
+        const DescriptorSetLayout& getDescriptorSetLayout() const &;
     private:
-        vk::raii::Pipeline pipeline   = nullptr;
-        PipelineLayout pipelineLayout = nullptr;
-
+        vk::raii::Pipeline pipeline             = nullptr;
+        PipelineLayout pipelineLayout           = nullptr;
+        DescriptorSetLayout descriptorSetLayout = nullptr;
 };
 
 #endif

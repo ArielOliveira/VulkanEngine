@@ -12,6 +12,10 @@
 #include <iostream>
 #include <vulkan/vulkan_raii.hpp>
 
+#include <glm/gtc/matrix_transform.hpp>
+
+#include <chrono>
+
 using std::cout;
 using std::cerr;
 using std::endl;
@@ -29,6 +33,8 @@ using vk::raii::Semaphore;
 using vk::raii::Fence;
 using vk::raii::Buffer;
 using vk::raii::DeviceMemory;
+using vk::raii::DescriptorPool;
+using vk::raii::DescriptorSet;
 
 using vk::ImageLayout;
 using vk::AccessFlags2;
@@ -62,35 +68,55 @@ class Graphics {
         void createCommandBuffers();
         void createSyncObjects();
         void createVertexBuffer();
+        void createIndexBuffer();
+        void createUniformBuffers();
+        void createDescriptorPool();
+        void createDescriptorSets();
         void recordCommandBuffer(uint32_t imageIndex);
+        void updateUniformBuffer(uint32_t imageIndex);
 
         void transitionImageLayout(uint32_t imageIndex, 
                                   ImageLayout oldL, ImageLayout newL, 
                                   AccessFlags2 srcAccessMask, AccessFlags2 dstAccessMask,
                                   PipelineStageFlags2 srcStageMask, PipelineStageFlags2 dstStageMask);
-
+        
+        void copyBuffer(Buffer &srcBuffer, Buffer &dstBuffer, vk::DeviceSize size); 
+            
         const bool isDeviceSuitable(const PhysicalDevice &physicalDevice) const;
+        std::pair<Buffer, DeviceMemory> createBuffer(vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, vk::SharingMode sharingMode = vk::SharingMode::eExclusive, uint32_t queueCount = 0, const uint32_t* queueIndices = nullptr);
         uint32_t findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFlags properties);
 
         Context context;
-        Instance instance                           = nullptr;
-        PhysicalDevice physicalDevice               = nullptr;
-        Device device                               = nullptr;
-        Queue queue                                 = nullptr; // Graphics and presentation queue (for now)
-        SurfaceKHR surface                          = nullptr;
-        SwapChain swapChain                         = nullptr;
-        GraphicsPipeline graphicsPipeline           = nullptr;
-        CommandPool commandPool                     = nullptr;
-        Buffer vertexBuffer                         = nullptr;
-        DeviceMemory vertexBufferMemory             = nullptr;
+        Instance instance                                   = nullptr;
+        PhysicalDevice physicalDevice                       = nullptr;
+        Device device                                       = nullptr;
+        Queue graphicsQueue                                 = nullptr; // Graphics and presentation queue (for now)
+        Queue transferQueue                                 = nullptr;
+        SurfaceKHR surface                                  = nullptr;
+        SwapChain swapChain                                 = nullptr;
+        GraphicsPipeline graphicsPipeline                   = nullptr;
+        CommandPool graphicsCommandPool                     = nullptr;
+        CommandPool transferCommandPool                     = nullptr; // Using dedicated pools for short-lived command buffers allow for certain optimizations.
+        Buffer vertexBuffer                                 = nullptr;
+        Buffer indexBuffer                                  = nullptr;
+        DeviceMemory vertexBufferMemory                     = nullptr;
+        DeviceMemory indexBufferMemory                      = nullptr;
+        DescriptorPool descriptorPool                       = nullptr;
+
+        vector<DescriptorSet> descriptorSets;
+
+        vector<Buffer>       uniformBuffers;
+        vector<DeviceMemory> uniformBuffersMemory;
+        vector<void*>        uniformBuffersMapped;
 
         vector<CommandBuffer> commandBuffers;
         vector<Semaphore> presentCompleteSemaphores;
         vector<Semaphore> renderFinishedSemaphores;
         vector<Fence> inFlightFences;
 
-        uint32_t queueIndex               = ~0;
-        uint32_t frameIndex               =  0;
+        uint32_t graphicsQueueIndex               = ~0;
+        uint32_t transferQueueIndex               = ~0;
+        uint32_t frameIndex                       =  0;
 
         const std::vector<char const*> validationLayers = {
             "VK_LAYER_KHRONOS_validation"

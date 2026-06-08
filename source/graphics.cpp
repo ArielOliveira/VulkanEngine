@@ -22,6 +22,10 @@ Graphics::Graphics() {
 
     createCommandPool();
     createVertexBuffer();
+    createIndexBuffer();
+    createUniformBuffers();
+    createDescriptorPool();
+    createDescriptorSets();
     createCommandBuffers();
     createSyncObjects();
 }
@@ -186,19 +190,34 @@ void Graphics::setupDebugMessenger() {
 
 void Graphics::createLogicalDevice() {
     vector<vk::QueueFamilyProperties> queueFamilyProperties = physicalDevice.getQueueFamilyProperties();
-
+    
+    bool foundGraphicsAndPresentation = false;
+    bool foundDedicatedTransfer       = false;
+    
     for (uint32_t qfpIndex = 0; qfpIndex < queueFamilyProperties.size(); qfpIndex++) {
         if ((queueFamilyProperties[qfpIndex].queueFlags & vk::QueueFlagBits::eGraphics) &&
             physicalDevice.getSurfaceSupportKHR(qfpIndex, *surface)) {
-            queueIndex = qfpIndex;
-            break;
+            graphicsQueueIndex = qfpIndex;
+
+            foundGraphicsAndPresentation = true;
+        } else if ((queueFamilyProperties[qfpIndex].queueFlags & vk::QueueFlagBits::eTransfer) &&
+                  !(queueFamilyProperties[qfpIndex].queueFlags & vk::QueueFlagBits::eGraphics) &&
+                  !(queueFamilyProperties[qfpIndex].queueFlags & vk::QueueFlagBits::eCompute)) {
+            transferQueueIndex = qfpIndex;
+
+            cout << "Found dedicated transfer queue." << '\n';
+
+            foundDedicatedTransfer = true;    
         }
+
+        if (foundDedicatedTransfer && foundGraphicsAndPresentation) break;
     }
 
-    if (queueIndex == ~0)
+    if (graphicsQueueIndex == ~0)
         throw std::runtime_error("Could not find a queue for graphics and presentation when creating logical device -> terminating");
     
-    float queuePriority = 0.5f;  
+    float graphicsQueuePriority = 0.5f;
+    float transferQueuePriority = 0.5f;  
 
     vk::PhysicalDeviceFeatures deviceFeatures;
 
@@ -218,22 +237,37 @@ void Graphics::createLogicalDevice() {
         vk::KHRSwapchainExtensionName
     };
 
-    vk::DeviceQueueCreateInfo deviceQueueCreateInfo { 
-        .queueFamilyIndex = queueIndex,
+    uint32_t queueCount = foundDedicatedTransfer ? 2 : 1;
+    std::array<vk::DeviceQueueCreateInfo, 2> queueCreateInfos;
+
+    vk::DeviceQueueCreateInfo deviceGraphicsQueueCreateInfo { 
+        .queueFamilyIndex = graphicsQueueIndex,
         .queueCount       = 1,
-        .pQueuePriorities = &queuePriority
+        .pQueuePriorities = &graphicsQueuePriority
     };
+
+    if (foundDedicatedTransfer) {
+        vk::DeviceQueueCreateInfo deviceTransferQueueCreateInfo {
+            .queueFamilyIndex = transferQueueIndex,
+            .queueCount       = 1,
+            .pQueuePriorities = &transferQueuePriority
+        };
+
+        queueCreateInfos = { deviceGraphicsQueueCreateInfo, deviceTransferQueueCreateInfo };
+    }
 
     vk::DeviceCreateInfo deviceCreateInfo {
         .pNext                   = &featureChain.get<vk::PhysicalDeviceFeatures2>(),
-        .queueCreateInfoCount    = 1,
-        .pQueueCreateInfos       = &deviceQueueCreateInfo,
+        .queueCreateInfoCount    = queueCount,
+        .pQueueCreateInfos       = foundDedicatedTransfer ? queueCreateInfos.data() : &deviceGraphicsQueueCreateInfo,
         .enabledExtensionCount   = static_cast<uint32_t>(requiredDeviceExtensions.size()),
         .ppEnabledExtensionNames = requiredDeviceExtensions.data()
     };
 
-    device = Device(physicalDevice, deviceCreateInfo);
-    queue  = Queue(device, queueIndex, 0);
+    device            = Device(physicalDevice, deviceCreateInfo);
+    graphicsQueue     = Queue(device, graphicsQueueIndex, 0);
+    if (foundDedicatedTransfer)
+        transferQueue = Queue(device, transferQueueIndex, 0);
 }
 
 void Graphics::createSurface() {
@@ -246,17 +280,27 @@ void Graphics::createSurface() {
 }
 
 void Graphics::createCommandPool() {
-    vk::CommandPoolCreateInfo poolInfo {
+    vk::CommandPoolCreateInfo graphicsPoolInfo {
         .flags              = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
-        .queueFamilyIndex   = queueIndex
+        .queueFamilyIndex   = graphicsQueueIndex
     };
 
-    commandPool = CommandPool(device, poolInfo);
+    graphicsCommandPool = CommandPool(device, graphicsPoolInfo);
+
+    // Review flags usage. Tutorial suggests using only eTransient, while AI chatbot (shame on me)
+    // mentions short-lived command buffers (i.e transfers) will get reset often (?) so eResetCommandBuffer 
+    // is also appropriate.
+    vk::CommandPoolCreateInfo transferPoolInfo {
+        .flags              = vk::CommandPoolCreateFlagBits::eTransient | vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
+        .queueFamilyIndex   = transferQueueIndex
+    };
+
+    transferCommandPool = CommandPool(device, transferPoolInfo);
 }
 
 void Graphics::createCommandBuffers() {
     vk::CommandBufferAllocateInfo allocInfo {
-        .commandPool        = commandPool,
+        .commandPool        = graphicsCommandPool,
         .level              = vk::CommandBufferLevel::ePrimary,
         .commandBufferCount = MAX_FRAMES_IN_FLIGHT
     };
@@ -277,26 +321,159 @@ void Graphics::createSyncObjects() {
 }
 
 void Graphics::createVertexBuffer() {
+    std::array<uint32_t, 2> queueFamilyIndices = { graphicsQueueIndex, transferQueueIndex };
+    vk::DeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+
+    auto [stagingBuffer, stagingBufferMemory]  = createBuffer(
+            bufferSize,
+            vk::BufferUsageFlagBits::eTransferSrc,
+            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+    );
+
+    std::tie(vertexBuffer, vertexBufferMemory) = createBuffer(
+        bufferSize,
+        vk::BufferUsageFlagBits::eVertexBuffer       | vk::BufferUsageFlagBits::eTransferDst,
+        vk::MemoryPropertyFlagBits::eDeviceLocal,
+        transferQueueIndex == ~0 ? vk::SharingMode::eExclusive : vk::SharingMode::eConcurrent,
+        transferQueueIndex == ~0 ? 0                           : 2,
+        transferQueueIndex == ~0 ? nullptr                     : queueFamilyIndices.data()
+    );
+
+    void* data = stagingBufferMemory.mapMemory(0, bufferSize);
+    memcpy(data, vertices.data(), bufferSize);
+    stagingBufferMemory.unmapMemory();
+
+    copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
+}
+
+void Graphics::createIndexBuffer() {
+    std::array<uint32_t, 2> queueFamilyIndices = { graphicsQueueIndex, transferQueueIndex };
+    vk::DeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+
+    auto [stagingBuffer, stagingBufferMemory]  = createBuffer(
+            bufferSize,
+            vk::BufferUsageFlagBits::eTransferSrc,
+            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+    );
+
+    void *data = stagingBufferMemory.mapMemory(0, bufferSize);
+    memcpy(data, indices.data(), (size_t)bufferSize);
+    stagingBufferMemory.unmapMemory();
+
+    std::tie(indexBuffer, indexBufferMemory) = createBuffer(
+        bufferSize,
+        vk::BufferUsageFlagBits::eIndexBuffer        | vk::BufferUsageFlagBits::eTransferDst,
+        vk::MemoryPropertyFlagBits::eDeviceLocal,
+        transferQueueIndex == ~0 ? vk::SharingMode::eExclusive : vk::SharingMode::eConcurrent,
+        transferQueueIndex == ~0 ? 0                           : 2,
+        transferQueueIndex == ~0 ? nullptr                     : queueFamilyIndices.data()
+    );
+
+    copyBuffer(stagingBuffer, indexBuffer, bufferSize);
+}
+
+void Graphics::createUniformBuffers() {
+    std::array<uint32_t, 2> queueFamilyIndices = { graphicsQueueIndex, transferQueueIndex };
+
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        vk::DeviceSize bufferSize = sizeof(UniformBufferObject);
+        auto [buffer, bufferMem] = createBuffer(
+            bufferSize,
+            vk::BufferUsageFlagBits::eUniformBuffer,
+            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+            transferQueueIndex == ~0 ? vk::SharingMode::eExclusive : vk::SharingMode::eConcurrent,
+            transferQueueIndex == ~0 ? 0                           : 2,
+            transferQueueIndex == ~0 ? nullptr                     : queueFamilyIndices.data()
+        );
+
+        uniformBuffers.emplace_back(std::move(buffer));
+        uniformBuffersMemory.emplace_back(std::move(bufferMem));
+        uniformBuffersMapped.emplace_back(uniformBuffersMemory.back().mapMemory(0, bufferSize));
+    }
+}
+
+void Graphics::createDescriptorPool() {
+    vk::DescriptorPoolSize poolSize {
+        .type            = vk::DescriptorType::eUniformBuffer,
+        .descriptorCount = MAX_FRAMES_IN_FLIGHT
+    };
+
+    vk::DescriptorPoolCreateInfo poolInfo {
+        .flags           = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
+        .maxSets         = MAX_FRAMES_IN_FLIGHT,
+        .poolSizeCount   = 1,
+        .pPoolSizes      = &poolSize
+    };
+
+    descriptorPool = DescriptorPool(device, poolInfo);
+}
+
+void Graphics::createDescriptorSets() {
+    vector<vk::DescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, *graphicsPipeline.getDescriptorSetLayout());
+    vk::DescriptorSetAllocateInfo allocInfo {
+        .descriptorPool         = descriptorPool,
+        .descriptorSetCount     = static_cast<uint32_t>(layouts.size()),
+        .pSetLayouts            = layouts.data()
+    };
+
+    descriptorSets = device.allocateDescriptorSets(allocInfo);
+
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        vk::DescriptorBufferInfo bufferInfo {
+            .buffer = uniformBuffers[i],
+            .offset = 0,
+            .range  = sizeof(UniformBufferObject)
+        };
+
+        vk::WriteDescriptorSet descriptorWrite {
+            .dstSet                 = descriptorSets[i],
+            .dstBinding             = 0,
+            .dstArrayElement        = 0,
+            .descriptorCount        = 1,
+            .descriptorType         = vk::DescriptorType::eUniformBuffer,
+            .pBufferInfo            = &bufferInfo
+        };
+
+        device.updateDescriptorSets(descriptorWrite, {});
+    }
+}
+
+std::pair<Buffer, DeviceMemory> Graphics::createBuffer(vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, vk::SharingMode sharingMode, uint32_t queueCount, const uint32_t* queueIndices) {
     vk::BufferCreateInfo bufferInfo {
-        .size        = sizeof(vertices[0]) * vertices.size(),
-        .usage       = vk::BufferUsageFlagBits::eVertexBuffer,
-        .sharingMode = vk::SharingMode::eExclusive
+        .size                   = size,
+        .usage                  = usage,
+        .sharingMode            = sharingMode,
+        .queueFamilyIndexCount  = queueCount,
+        .pQueueFamilyIndices    = queueIndices
     };
 
-    vertexBuffer = Buffer(device, bufferInfo);
-
-    vk::MemoryRequirements memRequirements = vertexBuffer.getMemoryRequirements();
-    vk::MemoryAllocateInfo memoryAllocateInfo {
-        .allocationSize  = memRequirements.size,
-        .memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent)
+    Buffer buffer = Buffer(device, bufferInfo);
+    vk::MemoryRequirements memRequirements = buffer.getMemoryRequirements();
+    vk::MemoryAllocateInfo memAllocateInfo = { 
+        .allocationSize = memRequirements.size, 
+        .memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties) 
     };
 
-    vertexBufferMemory = DeviceMemory(device, memoryAllocateInfo);
-    vertexBuffer.bindMemory(*vertexBufferMemory, 0);
+    DeviceMemory bufferMemory = DeviceMemory(device, memAllocateInfo);
+    buffer.bindMemory(*bufferMemory, 0);
 
-    void* data = vertexBufferMemory.mapMemory(0, bufferInfo.size);
-    memcpy(data, vertices.data(), bufferInfo.size);
-    vertexBufferMemory.unmapMemory();
+    return { std::move(buffer), std::move(bufferMemory) };
+}
+
+void Graphics::copyBuffer(Buffer &srcBuffer, Buffer &dstBuffer, vk::DeviceSize size) {
+    vk::CommandBufferAllocateInfo allocInfo {
+        .commandPool        = transferCommandPool,
+        .level              = vk::CommandBufferLevel::ePrimary,
+        .commandBufferCount = 1
+    };
+
+    CommandBuffer copyCommandBuffer = std::move(device.allocateCommandBuffers(allocInfo).front());
+    copyCommandBuffer.begin({.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
+    copyCommandBuffer.copyBuffer(*srcBuffer, *dstBuffer, vk::BufferCopy(0, 0, size));
+    copyCommandBuffer.end();
+
+    transferQueue.submit(vk::SubmitInfo{ .commandBufferCount = 1, .pCommandBuffers = &*copyCommandBuffer }, nullptr);
+    transferQueue.waitIdle();
 }
 
 void Graphics::recordCommandBuffer(uint32_t imageIndex) {
@@ -334,7 +511,9 @@ void Graphics::recordCommandBuffer(uint32_t imageIndex) {
     commandBuffers[frameIndex].setViewport(0, vk::Viewport(0.0f, 0.0f, static_cast<float>(swapChain.getExtent().width), static_cast<float>(swapChain.getExtent().height), 0.0f, 1.0f));
     commandBuffers[frameIndex].setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapChain.getExtent()));
     commandBuffers[frameIndex].bindVertexBuffers(0, *vertexBuffer, {0});
-    commandBuffers[frameIndex].draw(static_cast<uint32_t>(vertices.size()), 1, 0, 0);
+    commandBuffers[frameIndex].bindIndexBuffer(*indexBuffer, 0, vk::IndexType::eUint16);
+    commandBuffers[frameIndex].bindDescriptorSets(vk::PipelineBindPoint::eGraphics, graphicsPipeline.getPipelineLayout(), 0, *descriptorSets[frameIndex], nullptr);
+    commandBuffers[frameIndex].drawIndexed(static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
     commandBuffers[frameIndex].endRendering();
 
     transitionImageLayout(
@@ -383,6 +562,24 @@ void Graphics::transitionImageLayout(
     commandBuffers[frameIndex].pipelineBarrier2(dependencyInfo);
 }
 
+void Graphics::updateUniformBuffer(uint32_t frameIndex) {
+    static auto startTime = std::chrono::high_resolution_clock::now();
+
+    auto currentTime = std::chrono::high_resolution_clock::now();
+    float time       = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+
+    UniformBufferObject ubo{
+        .model = rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f)),
+        .view  = lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f)),
+        .proj  = glm::perspective(glm::radians(45.0f), static_cast<float>(swapChain.getExtent().width) / static_cast<float>(swapChain.getExtent().height), 0.1f, 10.0f)
+    };
+
+    ubo.proj[1][1] *= -1;
+
+    memcpy(uniformBuffersMapped[frameIndex], &ubo, sizeof(ubo));
+}
+
+
 void Graphics::drawFrame() {
     vk::Result fenceResult = device.waitForFences(*inFlightFences[frameIndex], vk::True, UINT64_MAX);
     
@@ -411,10 +608,12 @@ void Graphics::drawFrame() {
 
     recordCommandBuffer(imageIndex);
 
-    queue.waitIdle();
+    graphicsQueue.waitIdle();
 
     vk::PipelineStageFlags waitDestinationStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput);
     
+    updateUniformBuffer(frameIndex);
+
     const vk::SubmitInfo submitInfo {
         .waitSemaphoreCount   = 1,
         .pWaitSemaphores      = &*presentCompleteSemaphores[frameIndex],
@@ -425,7 +624,7 @@ void Graphics::drawFrame() {
         .pSignalSemaphores    = &*renderFinishedSemaphores[frameIndex]
     };
 
-    queue.submit(submitInfo, *inFlightFences[frameIndex]);
+    graphicsQueue.submit(submitInfo, *inFlightFences[frameIndex]);
 
     const vk::PresentInfoKHR presentInfo {
         .waitSemaphoreCount = 1,
@@ -435,7 +634,7 @@ void Graphics::drawFrame() {
         .pImageIndices      = &imageIndex
     };
 
-    result = queue.presentKHR(presentInfo);
+    result = graphicsQueue.presentKHR(presentInfo);
 
     switch (result) {
 		case vk::Result::eSuccess: break;
@@ -445,6 +644,7 @@ void Graphics::drawFrame() {
 
 			std::cout << "vk::Queue::presentKHR returned eSuboptimal or eErrorOutOfDate. Reacreating swap chain... !\n";
 
+            device.waitIdle(); // Wait until resource is no longer being used before recreating
             swapChain = SwapChain(swapChain, surface, physicalDevice, device);
 			break;
 		default:

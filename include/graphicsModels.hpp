@@ -1,7 +1,11 @@
 #ifndef GRAPHICS_MODELS_HPP
 #define GRAPHICS_MODELS_HPP
  
+
 #include <vulkan/vulkan_raii.hpp>
+// Forces GLM to use a type versions with alighnment requirements 
+// specified by Vulkan https://docs.vulkan.org/spec/latest/chapters/interfaces.html#interfaces-resources-layout
+// #define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
 #include <glm/glm.hpp>
 
 #include <array>
@@ -35,10 +39,22 @@ struct Vertex {
     }
 };
 
+// UniformBuffer struct with explicit alignment specifier (C++11)
+struct UniformBufferObject {
+    alignas(16) glm::mat4 model;
+    alignas(16) glm::mat4 view;
+    alignas(16) glm::mat4 proj;
+};
+
 const std::vector<Vertex> vertices = {
-    {{ 0.0f, -0.5f}, {1.0f, 1.0f, 1.0f}},
-    {{ 0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}},
-    {{-0.5f,  0.5f}, {1.0f, 0.0f, 1.0f}},
+    {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{ 0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{ 0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}},
+    {{-0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}},
+};
+
+const std::vector<uint16_t> indices  = {
+    0, 1, 2, 2, 3, 0
 };
 
 #endif

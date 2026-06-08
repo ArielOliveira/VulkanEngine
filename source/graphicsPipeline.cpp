@@ -78,7 +78,7 @@ GraphicsPipeline::GraphicsPipeline(const Device &device, const Extent2D &swapCha
         .rasterizerDiscardEnable    = vk::False,
         .polygonMode                = vk::PolygonMode::eFill,
         .cullMode                   = vk::CullModeFlagBits::eBack,
-        .frontFace                  = vk::FrontFace::eClockwise,
+        .frontFace                  = vk::FrontFace::eCounterClockwise,
         .depthBiasEnable            = vk::False,
         .lineWidth                  = 1.0f
     };
@@ -100,8 +100,23 @@ GraphicsPipeline::GraphicsPipeline(const Device &device, const Extent2D &swapCha
         .pAttachments = &colorBlendAttachment
     };
 
+    vk::DescriptorSetLayoutBinding uboLayoutBinding {
+        .binding          = 0,
+        .descriptorType   = vk::DescriptorType::eUniformBuffer,
+        .descriptorCount  = 1,
+        .stageFlags       = vk::ShaderStageFlagBits::eVertex
+    };
+
+    vk::DescriptorSetLayoutCreateInfo layoutInfo {
+        .bindingCount     = 1,
+        .pBindings        = &uboLayoutBinding
+    };
+
+    descriptorSetLayout = DescriptorSetLayout(device, layoutInfo);
+
     vk::PipelineLayoutCreateInfo pipelineLayoutInfo {
-        .setLayoutCount = 0,
+        .setLayoutCount         = 1,
+        .pSetLayouts            = &*descriptorSetLayout,
         .pushConstantRangeCount = 0
     };
 
@@ -142,7 +157,12 @@ GraphicsPipeline& GraphicsPipeline::operator=(std::nullptr_t) noexcept {
     pipelineLayout.clear();
     pipelineLayout = nullptr;
 
+    descriptorSetLayout.clear();
+    descriptorSetLayout = nullptr;
+
     return *this;
 }
 
 const vk::raii::Pipeline& GraphicsPipeline::getInstance() const & { return pipeline; }
+const PipelineLayout&      GraphicsPipeline::getPipelineLayout() const & { return pipelineLayout; }
+const DescriptorSetLayout& GraphicsPipeline::getDescriptorSetLayout() const & { return descriptorSetLayout; }
