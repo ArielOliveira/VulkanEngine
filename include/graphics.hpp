@@ -69,22 +69,32 @@ class Graphics {
         void createSyncObjects();
         void createVertexBuffer();
         void createIndexBuffer();
+        void createTextureImage();
+        void createTextureSampler();
         void createUniformBuffers();
         void createDescriptorPool();
         void createDescriptorSets();
         void recordCommandBuffer(uint32_t imageIndex);
         void updateUniformBuffer(uint32_t imageIndex);
 
-        void transitionImageLayout(uint32_t imageIndex, 
-                                  ImageLayout oldL, ImageLayout newL, 
-                                  AccessFlags2 srcAccessMask, AccessFlags2 dstAccessMask,
-                                  PipelineStageFlags2 srcStageMask, PipelineStageFlags2 dstStageMask);
+        void transitionImageLayout(const CommandBuffer &commandBuffer, const vk::Image &image,
+                                   ImageLayout oldL, ImageLayout newL, 
+                                   AccessFlags2 srcAccessMask, AccessFlags2 dstAccessMask,
+                                   PipelineStageFlags2 srcStageMask, PipelineStageFlags2 dstStageMask,
+                                   uint32_t srcQueue = vk::QueueFamilyIgnored, uint32_t dstQueue = vk::QueueFamilyIgnored);
         
         void copyBuffer(Buffer &srcBuffer, Buffer &dstBuffer, vk::DeviceSize size); 
+        void copyBufferToImage(CommandBuffer &commandBuffer, const Buffer &buffer, const vk::Image &image, uint32_t width, uint32_t height);
+        
+        CommandBuffer beginSingleTimeCommand(const CommandPool &commandPool);
+        void endSingleTimeCommand(CommandBuffer &&commandBuffer, const Queue &queue);
             
-        const bool isDeviceSuitable(const PhysicalDevice &physicalDevice) const;
         std::pair<Buffer, DeviceMemory> createBuffer(vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, vk::SharingMode sharingMode = vk::SharingMode::eExclusive, uint32_t queueCount = 0, const uint32_t* queueIndices = nullptr);
+        std::pair<vk::raii::Image, DeviceMemory> createImage(uint32_t width, uint32_t height, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties, vk::SharingMode sharingMode = vk::SharingMode::eExclusive, uint32_t queueCount = 0, const uint32_t* queueIndices = nullptr);
+        vk::raii::ImageView createTextureImageView(const vk::Image &image, vk::Format format);
+        const bool isDeviceSuitable(const PhysicalDevice &physicalDevice) const;
         uint32_t findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFlags properties);
+        
 
         Context context;
         Instance instance                                   = nullptr;
@@ -102,6 +112,13 @@ class Graphics {
         DeviceMemory vertexBufferMemory                     = nullptr;
         DeviceMemory indexBufferMemory                      = nullptr;
         DescriptorPool descriptorPool                       = nullptr;
+
+        vk::raii::Image        textureImage                 = nullptr;
+        vk::raii::ImageView    textureImageView             = nullptr;
+        vk::raii::Sampler      textureSampler               = nullptr;
+        vk::raii::DeviceMemory textureImageMemory           = nullptr;
+
+
 
         vector<DescriptorSet> descriptorSets;
 

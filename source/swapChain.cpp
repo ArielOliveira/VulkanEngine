@@ -48,6 +48,7 @@ void SwapChain::buildSwapChain(const SurfaceKHR &surface, const PhysicalDevice &
         .subresourceRange = { .aspectMask = vk::ImageAspectFlagBits::eColor, .levelCount = 1, .layerCount = 1 }
     };
 
+    swapChainImageViews.reserve(swapChainImages.size());
     for (auto &image : swapChainImages) {
         imageViewCreateInfo.image = image;
         swapChainImageViews.emplace_back(device, imageViewCreateInfo);
@@ -130,11 +131,11 @@ const vk::Image& SwapChain::getImage(uint32_t index) const {
     return swapChainImages[index];
 }
 
-const vk::ImageView& SwapChain::getImageView(uint32_t index) const {
+const vk::raii::ImageView& SwapChain::getImageView(uint32_t index) const {
     if (index < 0 || index > swapChainImageViews.size()-1)
         throw std::runtime_error("Invalid Swapchain image index!");
 
-    return *swapChainImageViews[index];
+    return swapChainImageViews[index];
 }
 
 const vk::ResultValue<uint32_t> SwapChain::acquireNextImage(uint64_t timeout, const Semaphore &semaphore, const Fence &fence) const { return swapChain.acquireNextImage(timeout, semaphore, fence); }

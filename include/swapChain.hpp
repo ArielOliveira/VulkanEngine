@@ -46,22 +46,22 @@ class SwapChain {
         static uint32_t         chooseSwapMinImageCount(const SurfaceCapabilitiesKHR &capabilities);
         static Extent2D         chooseSwapExtent(const SurfaceCapabilitiesKHR &capabilities);
 
-        const SwapchainKHR&     getInstance()                const&;
-        const SurfaceFormatKHR& getSurfaceFormat()           const;
-        const Extent2D&         getExtent()                  const;
-        const vk::Image&        getImage(uint32_t index)     const;
-        const vk::ImageView&    getImageView(uint32_t index) const;
+        const SwapchainKHR&           getInstance()                const&;
+        const SurfaceFormatKHR&       getSurfaceFormat()           const;
+        const Extent2D&               getExtent()                  const;
+        const vk::Image&              getImage(uint32_t index)     const;
+        const vk::raii::ImageView&    getImageView(uint32_t index) const;
         const size_t getImageCount() const;
 
         const vk::ResultValue<uint32_t> acquireNextImage(uint64_t timeout, const Semaphore &semaphore, const Fence &fence) const;
         
     
     private:
-        SwapchainKHR                swapChain = nullptr;
-        vector<vk::Image>           swapChainImages;
-        vector<vk::raii::ImageView> swapChainImageViews;
-        SurfaceFormatKHR            swapChainSurfaceFormat;
-        Extent2D                    swapChainExtent;
+        SwapchainKHR                      swapChain = nullptr;
+        vector<vk::Image>                 swapChainImages;
+        vector<vk::raii::ImageView>       swapChainImageViews;
+        SurfaceFormatKHR                  swapChainSurfaceFormat;
+        Extent2D                          swapChainExtent;
 
         void cleanUp();
         void buildSwapChain(const SurfaceKHR &surface, const PhysicalDevice &physicalDevice, const Device &device);

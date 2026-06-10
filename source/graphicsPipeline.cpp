@@ -100,16 +100,21 @@ GraphicsPipeline::GraphicsPipeline(const Device &device, const Extent2D &swapCha
         .pAttachments = &colorBlendAttachment
     };
 
-    vk::DescriptorSetLayoutBinding uboLayoutBinding {
-        .binding          = 0,
-        .descriptorType   = vk::DescriptorType::eUniformBuffer,
-        .descriptorCount  = 1,
-        .stageFlags       = vk::ShaderStageFlagBits::eVertex
-    };
+    std::array<vk::DescriptorSetLayoutBinding, 2> bindings {{
+        { .binding          = 0,
+          .descriptorType   = vk::DescriptorType::eUniformBuffer,
+          .descriptorCount  = 1,
+          .stageFlags       = vk::ShaderStageFlagBits::eVertex },
+        
+        { .binding          = 1,
+          .descriptorType   = vk::DescriptorType::eCombinedImageSampler,
+          .descriptorCount  = 1,
+          .stageFlags       = vk::ShaderStageFlagBits::eFragment }
+    }};
 
     vk::DescriptorSetLayoutCreateInfo layoutInfo {
-        .bindingCount     = 1,
-        .pBindings        = &uboLayoutBinding
+        .bindingCount     = static_cast<uint32_t>(bindings.size()),
+        .pBindings        = bindings.data()
     };
 
     descriptorSetLayout = DescriptorSetLayout(device, layoutInfo);
