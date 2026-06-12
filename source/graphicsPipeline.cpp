@@ -1,6 +1,6 @@
 #include <graphicsPipeline.hpp>
 
-GraphicsPipeline::GraphicsPipeline(const Device &device, const Extent2D &swapChainExtent, const SurfaceFormatKHR &swapChainSurfaceFormat) {
+GraphicsPipeline::GraphicsPipeline(const Device &device, const Extent2D &swapChainExtent, const SurfaceFormatKHR &swapChainSurfaceFormat, vk::Format depthFormat) {
     // Create Shader Module
     string shaderAbsolutePath = FileHelper::getExecutablePath().generic_string();
     shaderAbsolutePath.append(shaderRelativePath);
@@ -66,7 +66,7 @@ GraphicsPipeline::GraphicsPipeline(const Device &device, const Extent2D &swapCha
         swapChainExtent
     };
 
-    vk::PipelineViewportStateCreateInfo viewPortState {
+    vk::PipelineViewportStateCreateInfo viewportState {
         .viewportCount = 1,
         .pViewports    = &viewport,
         .scissorCount  = 1,
@@ -100,6 +100,14 @@ GraphicsPipeline::GraphicsPipeline(const Device &device, const Extent2D &swapCha
         .pAttachments = &colorBlendAttachment
     };
 
+    vk::PipelineDepthStencilStateCreateInfo depthStencil {
+        .depthTestEnable        = vk::True,
+        .depthWriteEnable       = vk::True,
+        .depthCompareOp         = vk::CompareOp::eLess,
+        .depthBoundsTestEnable  = vk::False,
+        .stencilTestEnable      = vk::False
+    };
+
     std::array<vk::DescriptorSetLayoutBinding, 2> bindings {{
         { .binding          = 0,
           .descriptorType   = vk::DescriptorType::eUniformBuffer,
@@ -127,27 +135,24 @@ GraphicsPipeline::GraphicsPipeline(const Device &device, const Extent2D &swapCha
 
     pipelineLayout = PipelineLayout(device, pipelineLayoutInfo);
 
-    vk::PipelineRenderingCreateInfo pipelineRenderingInfo {
-        .colorAttachmentCount = 1,
-        .pColorAttachmentFormats = &swapChainSurfaceFormat.format
-    };
-
     vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = {
         {.stageCount            = 2,
          .pStages               = shaderStages,
          .pVertexInputState     = &vertexInputInfo,
          .pInputAssemblyState   = &inputAssembly,
-         .pViewportState        = &viewPortState,
+         .pViewportState        = &viewportState,
          .pRasterizationState   = &rasterizer,
          .pMultisampleState     = &multisampling,
+         .pDepthStencilState    = &depthStencil,
          .pColorBlendState      = &colorBlending,
          .pDynamicState         = &dynamicState,
          .layout                = pipelineLayout,
          .renderPass            = nullptr},
         
         {.colorAttachmentCount    = 1,
-         .pColorAttachmentFormats = &swapChainSurfaceFormat.format}
-    };
+         .pColorAttachmentFormats = &swapChainSurfaceFormat.format,
+         .depthAttachmentFormat   = depthFormat}
+    }; 
 
     pipeline = vk::raii::Pipeline(device, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
 }

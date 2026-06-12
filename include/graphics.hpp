@@ -42,6 +42,9 @@ using vk::PipelineStageFlags2;
 
 constexpr int MAX_FRAMES_IN_FLIGHT = 2;
 
+const std::string MODEL_PATH   = "models/viking_room.obj";
+const std::string TEXTURE_PATH = "textures/viking_room.png";
+
 class Graphics {
     public:
         static Graphics& getInstance();
@@ -67,6 +70,8 @@ class Graphics {
         void createCommandPool();
         void createCommandBuffers();
         void createSyncObjects();
+        void createDepthResources();
+        void loadModel();
         void createVertexBuffer();
         void createIndexBuffer();
         void createTextureImage();
@@ -81,6 +86,7 @@ class Graphics {
                                    ImageLayout oldL, ImageLayout newL, 
                                    AccessFlags2 srcAccessMask, AccessFlags2 dstAccessMask,
                                    PipelineStageFlags2 srcStageMask, PipelineStageFlags2 dstStageMask,
+                                   vk::ImageAspectFlagBits imageAspectFlags,
                                    uint32_t srcQueue = vk::QueueFamilyIgnored, uint32_t dstQueue = vk::QueueFamilyIgnored);
         
         void copyBuffer(Buffer &srcBuffer, Buffer &dstBuffer, vk::DeviceSize size); 
@@ -91,9 +97,11 @@ class Graphics {
             
         std::pair<Buffer, DeviceMemory> createBuffer(vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, vk::SharingMode sharingMode = vk::SharingMode::eExclusive, uint32_t queueCount = 0, const uint32_t* queueIndices = nullptr);
         std::pair<vk::raii::Image, DeviceMemory> createImage(uint32_t width, uint32_t height, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties, vk::SharingMode sharingMode = vk::SharingMode::eExclusive, uint32_t queueCount = 0, const uint32_t* queueIndices = nullptr);
-        vk::raii::ImageView createTextureImageView(const vk::Image &image, vk::Format format);
+        vk::raii::ImageView createImageView(const vk::Image &image, vk::Format format, vk::ImageAspectFlagBits aspectMaskFlags);
         const bool isDeviceSuitable(const PhysicalDevice &physicalDevice) const;
         uint32_t findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFlags properties);
+        vk::Format findDepthFormat();
+        vk::Format findSupportedFormat(const vector<vk::Format>& candidates, vk::ImageTiling tiling, vk::FormatFeatureFlags features);
         
 
         Context context;
@@ -118,7 +126,12 @@ class Graphics {
         vk::raii::Sampler      textureSampler               = nullptr;
         vk::raii::DeviceMemory textureImageMemory           = nullptr;
 
+        vk::raii::Image        depthImage                   = nullptr;
+        vk::raii::DeviceMemory depthImageMemory             = nullptr;
+        vk::raii::ImageView    depthImageView               = nullptr;
 
+        vector<Vertex> vertices;
+        vector<uint32_t> indices;
 
         vector<DescriptorSet> descriptorSets;
 

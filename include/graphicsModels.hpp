@@ -3,9 +3,10 @@
  
 
 #include <vulkan/vulkan_raii.hpp>
-// Forces GLM to use a type versions with alighnment requirements 
-// specified by Vulkan https://docs.vulkan.org/spec/latest/chapters/interfaces.html#interfaces-resources-layout
+// Forces GLM to use a type versions with alignment requirements that are
+// compatible with Vulkan specification: https://docs.vulkan.org/spec/latest/chapters/interfaces.html#interfaces-resources-layout
 // #define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 
 #include <array>
@@ -13,7 +14,7 @@
 using std::array;
 
 struct Vertex {
-    glm::vec2 pos;
+    glm::vec3 pos;
     glm::vec3 color;
     glm::vec2 texCoord;
 
@@ -29,7 +30,7 @@ struct Vertex {
         return {{
             {.location = 0, 
              .binding  = 0, 
-             .format   = vk::Format::eR32G32Sfloat,
+             .format   = vk::Format::eR32G32B32Sfloat,
              .offset   = offsetof(Vertex, pos)},
             
             {.location = 1,
@@ -52,15 +53,21 @@ struct UniformBufferObject {
     alignas(16) glm::mat4 proj;
 };
 
-const std::vector<Vertex> vertices = {
-    {{-0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-    {{ 0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
-    {{ 0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
-    {{-0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
+const std::vector<Vertex> planeVertices = {
+    {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
+    {{ 0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
+    {{ 0.5f,  0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
+    {{-0.5f,  0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
+
+    {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
+    {{ 0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
+    {{ 0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
+    {{-0.5f,  0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}
 };
 
-const std::vector<uint16_t> indices  = {
-    0, 1, 2, 2, 3, 0
+const std::vector<uint16_t> planeIndices  = {
+    0, 1, 2, 2, 3, 0,
+    4, 5, 6, 6, 7, 4
 };
 
 #endif

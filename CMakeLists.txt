@@ -36,7 +36,8 @@ find_package(glm CONFIG REQUIRED)
 add_subdirectory(${LIB_DIR}/glfw)
 add_subdirectory(${LIB_DIR}/vulkan)
 
-add_executable(${PROJECT_NAME} ${ALL_SOURCES})
+add_executable(${PROJECT_NAME} ${ALL_SOURCES}
+    include/tiny_obj_loader.h)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE glfw Vulkan::cppm glm::glm)
 target_compile_definitions(${PROJECT_NAME} PRIVATE CMAKE_EXPORT_COMPILE_COMMANDS=1)

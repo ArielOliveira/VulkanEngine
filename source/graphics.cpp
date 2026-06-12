@@ -3,6 +3,10 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
+#define TINYOBJLOADER_IMPLEMENTATION
+#include <tiny_obj_loader.h>
+
+
 Graphics& Graphics::getInstance() {
     static Graphics instance;
 
@@ -21,9 +25,11 @@ Graphics::Graphics() {
     createLogicalDevice();
     
     swapChain        = SwapChain(surface, physicalDevice, device);
-    graphicsPipeline = GraphicsPipeline(device, swapChain.getExtent(), swapChain.getSurfaceFormat());
+    graphicsPipeline = GraphicsPipeline(device, swapChain.getExtent(), swapChain.getSurfaceFormat(), findDepthFormat());
 
     createCommandPool();
+    createDepthResources();
+    loadModel();
     createVertexBuffer();
     createIndexBuffer();
     createTextureImage();
@@ -326,6 +332,45 @@ void Graphics::createSyncObjects() {
     }
 }
 
+void Graphics::createDepthResources() {
+    vk::Format depthFormat = findDepthFormat();
+
+    std::tie(depthImage, depthImageMemory) = createImage(swapChain.getExtent().width, swapChain.getExtent().height, depthFormat, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eDepthStencilAttachment, vk::MemoryPropertyFlagBits::eDeviceLocal);
+    depthImageView                         = createImageView(depthImage, depthFormat, vk::ImageAspectFlagBits::eDepth);
+}
+
+void Graphics::loadModel() {
+    tinyobj::attrib_t attrib;
+    vector<tinyobj::shape_t> shapes;
+    vector<tinyobj::material_t> materials;
+    string                      err;
+
+    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &err, MODEL_PATH.c_str()))
+        throw std::runtime_error(err);
+
+    for (const auto& shape : shapes) {
+        for (const auto& index : shape.mesh.indices) {
+            Vertex vertex{};
+
+            vertex.pos = {
+                attrib.vertices[3 * index.vertex_index + 0],
+                attrib.vertices[3 * index.vertex_index + 1],
+                attrib.vertices[3 * index.vertex_index + 2]
+            };
+
+            vertex.texCoord = {
+                attrib.texcoords[2 * index.texcoord_index + 0],
+                1.0 - attrib.texcoords[2 * index.texcoord_index + 1]
+            };
+
+            vertex.color = {1.0f, 1.0f, 1.0f};
+
+            vertices.push_back(vertex);
+            indices.push_back(indices.size());
+        }
+    }
+}
+
 void Graphics::createVertexBuffer() {
     std::array<uint32_t, 2> queueFamilyIndices = { graphicsQueueIndex, transferQueueIndex };
     vk::DeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
@@ -381,7 +426,7 @@ void Graphics::createIndexBuffer() {
 void Graphics::createTextureImage() {
     int texWidth, texHeight, texChannels;
 
-    stbi_uc *pixels             = stbi_load("textures/texture.jpg", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+    stbi_uc *pixels             = stbi_load(TEXTURE_PATH.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
     vk::DeviceSize imageSize    = texWidth * texHeight * 4;
 
     if (!pixels) 
@@ -414,8 +459,7 @@ void Graphics::createTextureImage() {
                           {},                                     vk::ImageLayout::eTransferDstOptimal,
                           {},                                     vk::AccessFlagBits2::eTransferWrite,
                           vk::PipelineStageFlagBits2::eTopOfPipe, vk::PipelineStageFlagBits2::eTransfer,
-                          vk::QueueFamilyIgnored,                 
-                          vk::QueueFamilyIgnored);
+                          vk::ImageAspectFlagBits::eColor);
     
     copyBufferToImage(commandBuffer, stagingBuffer, *textureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
     
@@ -424,14 +468,15 @@ void Graphics::createTextureImage() {
                           vk::ImageLayout::eTransferDstOptimal,  vk::ImageLayout::eShaderReadOnlyOptimal,
                           vk::AccessFlagBits2::eTransferWrite,   {},
                           vk::PipelineStageFlagBits2::eTransfer, {},
+                          vk::ImageAspectFlagBits::eColor,
                           transferQueueIndex == ~0 ? vk::QueueFamilyIgnored : transferQueueIndex,
                           transferQueueIndex == ~0 ? vk::QueueFamilyIgnored : graphicsQueueIndex);
     
     endSingleTimeCommand(std::move(commandBuffer), transferQueueIndex == ~0 ? graphicsQueue : transferQueue);
 
-    textureImageView = createTextureImageView(*textureImage, vk::Format::eR8G8B8A8Srgb);
+    textureImageView = createImageView(*textureImage, vk::Format::eR8G8B8A8Srgb, vk::ImageAspectFlagBits::eColor);
     
-    if (transferQueueIndex == ~0) return; // All operations were done in the graphics queue and command pool.
+    if (transferQueueIndex == ~0) return; // All operations were done in the graphics queue no ownership transfer needed.
 
     CommandBuffer graphicsCommand = beginSingleTimeCommand(graphicsCommandPool);
 
@@ -440,6 +485,7 @@ void Graphics::createTextureImage() {
                           {},      vk::ImageLayout::eShaderReadOnlyOptimal,
                           {},      vk::AccessFlagBits2::eShaderRead,
                           {},      vk::PipelineStageFlagBits2::eFragmentShader,
+                          vk::ImageAspectFlagBits::eColor,
                           transferQueueIndex == ~0 ? vk::QueueFamilyIgnored : transferQueueIndex,
                           transferQueueIndex == ~0 ? vk::QueueFamilyIgnored : graphicsQueueIndex);
     endSingleTimeCommand(std::move(graphicsCommand), graphicsQueue);
@@ -469,12 +515,12 @@ void Graphics::createTextureSampler() {
     textureSampler = vk::raii::Sampler(device, samplerInfo);
 }
 
-vk::raii::ImageView Graphics::createTextureImageView(const vk::Image &image, vk::Format format) {
+vk::raii::ImageView Graphics::createImageView(const vk::Image &image, vk::Format format, vk::ImageAspectFlagBits aspectMaskFlags) {
     vk::ImageViewCreateInfo viewInfo {
     .image            = image,
     .viewType         = vk::ImageViewType::e2D,
     .format           = format,
-    .subresourceRange = {.aspectMask = vk::ImageAspectFlagBits::eColor, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1}};
+    .subresourceRange = {.aspectMask = aspectMaskFlags, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1}};
 
     return vk::raii::ImageView(device, viewInfo);
 }
@@ -558,6 +604,27 @@ void Graphics::createDescriptorSets() {
 
         device.updateDescriptorSets(descriptorWrites, {});
     }
+}
+
+vk::Format Graphics::findDepthFormat() {
+    return findSupportedFormat(
+        {vk::Format::eD32Sfloat, vk::Format::eD32SfloatS8Uint, vk::Format::eD24UnormS8Uint},
+         vk::ImageTiling::eOptimal,
+         vk::FormatFeatureFlagBits::eDepthStencilAttachment
+    );
+}
+
+vk::Format Graphics::findSupportedFormat(const vector<vk::Format>& candidates, vk::ImageTiling tiling, vk::FormatFeatureFlags features) {
+    for (const auto format : candidates) {
+        vk::FormatProperties props = physicalDevice.getFormatProperties(format);
+
+        if (((tiling == vk::ImageTiling::eLinear) && ((props.linearTilingFeatures & features) == features)) ||
+            ((tiling == vk::ImageTiling::eOptimal) && ((props.optimalTilingFeatures & features) == features))) {
+                return format;
+        }
+    }
+
+    throw std::runtime_error("failed to find supported format!");
 }
 
 std::pair<Buffer, DeviceMemory> Graphics::createBuffer(vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, vk::SharingMode sharingMode, uint32_t queueCount, const uint32_t* queueIndices) {
@@ -664,12 +731,26 @@ void Graphics::recordCommandBuffer(uint32_t imageIndex) {
         {},
         vk::AccessFlagBits2::eColorAttachmentWrite,
         vk::PipelineStageFlagBits2::eColorAttachmentOutput,
-        vk::PipelineStageFlagBits2::eColorAttachmentOutput
+        vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+        vk::ImageAspectFlagBits::eColor
+    );
+
+    transitionImageLayout(
+        commandBuffers[frameIndex],
+        depthImage,
+        ImageLayout::eUndefined,
+        ImageLayout::eDepthAttachmentOptimal,
+        vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
+        vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
+        vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
+        vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
+        vk::ImageAspectFlagBits::eDepth
     );
 
     vk::ClearValue clearColor = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f);
+    vk::ClearValue clearDepth = vk::ClearDepthStencilValue(1.0f, 0.0f);
 
-    vk::RenderingAttachmentInfo attachmentInfo {
+    vk::RenderingAttachmentInfo colorAttachmentInfo {
         .imageView      = swapChain.getImageView(imageIndex),
         .imageLayout    = vk::ImageLayout::eColorAttachmentOptimal,
         .loadOp         = vk::AttachmentLoadOp::eClear,
@@ -677,11 +758,20 @@ void Graphics::recordCommandBuffer(uint32_t imageIndex) {
         .clearValue     = clearColor
     };
 
+    vk::RenderingAttachmentInfo depthAttachmentInfo {
+        .imageView      = depthImageView,
+        .imageLayout    = vk::ImageLayout::eDepthAttachmentOptimal,
+        .loadOp         = vk::AttachmentLoadOp::eClear,
+        .storeOp        = vk::AttachmentStoreOp::eDontCare,
+        .clearValue     = clearDepth
+    };
+
     vk::RenderingInfo renderingInfo = {
         .renderArea           = {.offset = {0, 0}, .extent = swapChain.getExtent()},
         .layerCount           = 1,
         .colorAttachmentCount = 1,
-        .pColorAttachments    = &attachmentInfo
+        .pColorAttachments    = &colorAttachmentInfo,
+        .pDepthAttachment     = &depthAttachmentInfo
     };
 
     commandBuffers[frameIndex].beginRendering(renderingInfo);
@@ -689,7 +779,7 @@ void Graphics::recordCommandBuffer(uint32_t imageIndex) {
     commandBuffers[frameIndex].setViewport(0, vk::Viewport(0.0f, 0.0f, static_cast<float>(swapChain.getExtent().width), static_cast<float>(swapChain.getExtent().height), 0.0f, 1.0f));
     commandBuffers[frameIndex].setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapChain.getExtent()));
     commandBuffers[frameIndex].bindVertexBuffers(0, *vertexBuffer, {0});
-    commandBuffers[frameIndex].bindIndexBuffer(*indexBuffer, 0, vk::IndexType::eUint16);
+    commandBuffers[frameIndex].bindIndexBuffer(*indexBuffer, 0, vk::IndexTypeValue<decltype(indices)::value_type>::value);
     commandBuffers[frameIndex].bindDescriptorSets(vk::PipelineBindPoint::eGraphics, graphicsPipeline.getPipelineLayout(), 0, *descriptorSets[frameIndex], nullptr);
     commandBuffers[frameIndex].drawIndexed(static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
     commandBuffers[frameIndex].endRendering();
@@ -702,7 +792,8 @@ void Graphics::recordCommandBuffer(uint32_t imageIndex) {
         vk::AccessFlagBits2::eColorAttachmentWrite,
         {},
         vk::PipelineStageFlagBits2::eColorAttachmentOutput,
-        vk::PipelineStageFlagBits2::eBottomOfPipe
+        vk::PipelineStageFlagBits2::eBottomOfPipe,
+        vk::ImageAspectFlagBits::eColor
     );
 
     commandBuffers[frameIndex].end();
@@ -719,6 +810,7 @@ void Graphics::transitionImageLayout(
                         ImageLayout oldL, ImageLayout newL, 
                         AccessFlags2 srcAccessMask, AccessFlags2 dstAccessMask,
                         PipelineStageFlags2 srcStageMask, PipelineStageFlags2 dstStageMask,
+                        vk::ImageAspectFlagBits imageAspectFlags,
                         uint32_t srcQueue, uint32_t dstQueue) {
     vk::ImageMemoryBarrier2 barrier = {
         .srcStageMask           = srcStageMask,
@@ -731,7 +823,7 @@ void Graphics::transitionImageLayout(
         .dstQueueFamilyIndex    = dstQueue,
         .image                  = image,
         .subresourceRange       = {
-            .aspectMask     = vk::ImageAspectFlagBits::eColor,
+            .aspectMask     = imageAspectFlags,
             .baseMipLevel   = 0,
             .levelCount     = 1,
             .baseArrayLayer = 0,
@@ -781,6 +873,7 @@ void Graphics::drawFrame() {
         
         device.waitIdle(); // Wait until resource is no longer being used before recreating
         swapChain = SwapChain(swapChain, surface, physicalDevice, device);
+        createDepthResources();
         
         return;
     }
@@ -832,6 +925,7 @@ void Graphics::drawFrame() {
 
             device.waitIdle(); // Wait until resource is no longer being used before recreating
             swapChain = SwapChain(swapChain, surface, physicalDevice, device);
+            createDepthResources();
 			break;
 		default:
             std::cout << "Queue returned an unexpected result !\n";

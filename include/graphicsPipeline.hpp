@@ -21,6 +21,7 @@ class GraphicsPipeline {
         GraphicsPipeline() = delete;
         ~GraphicsPipeline();
 
+        GraphicsPipeline(const Device &device, const Extent2D &swapChain, const SurfaceFormatKHR &swapChainSurfaceFormat, vk::Format depthFormat);
         GraphicsPipeline(const Device &device, const Extent2D &swapChain, const SurfaceFormatKHR &swapChainSurfaceFormat);
         GraphicsPipeline(const GraphicsPipeline&) = delete;
         GraphicsPipeline(GraphicsPipeline &&other) noexcept = default;
