@@ -87,8 +87,12 @@ class Graphics {
                                    AccessFlags2 srcAccessMask, AccessFlags2 dstAccessMask,
                                    PipelineStageFlags2 srcStageMask, PipelineStageFlags2 dstStageMask,
                                    vk::ImageAspectFlagBits imageAspectFlags,
+                                   uint32_t mipLevels,
                                    uint32_t srcQueue = vk::QueueFamilyIgnored, uint32_t dstQueue = vk::QueueFamilyIgnored);
         
+        void generateMipmaps(const vk::Image &image, uint32_t texWidth, uint32_t texHeight, uint32_t mipLevels,
+                             vk::Format imageFormat, vk::ImageTiling tiling, vk::ImageUsageFlags usageFlags, vk::MemoryPropertyFlagBits memoryType);
+
         void copyBuffer(Buffer &srcBuffer, Buffer &dstBuffer, vk::DeviceSize size); 
         void copyBufferToImage(CommandBuffer &commandBuffer, const Buffer &buffer, const vk::Image &image, uint32_t width, uint32_t height);
         
@@ -96,14 +100,13 @@ class Graphics {
         void endSingleTimeCommand(CommandBuffer &&commandBuffer, const Queue &queue);
             
         std::pair<Buffer, DeviceMemory> createBuffer(vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, vk::SharingMode sharingMode = vk::SharingMode::eExclusive, uint32_t queueCount = 0, const uint32_t* queueIndices = nullptr);
-        std::pair<vk::raii::Image, DeviceMemory> createImage(uint32_t width, uint32_t height, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties, vk::SharingMode sharingMode = vk::SharingMode::eExclusive, uint32_t queueCount = 0, const uint32_t* queueIndices = nullptr);
-        vk::raii::ImageView createImageView(const vk::Image &image, vk::Format format, vk::ImageAspectFlagBits aspectMaskFlags);
+        std::pair<vk::raii::Image, DeviceMemory> createImage(uint32_t width, uint32_t height, uint32_t mipLevels, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties, vk::SharingMode sharingMode = vk::SharingMode::eExclusive, uint32_t queueCount = 0, const uint32_t* queueIndices = nullptr);
+        vk::raii::ImageView createImageView(const vk::Image &image, vk::Format format, vk::ImageAspectFlagBits aspectMaskFlags, uint32_t mipLevels);
         const bool isDeviceSuitable(const PhysicalDevice &physicalDevice) const;
         uint32_t findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFlags properties);
         vk::Format findDepthFormat();
         vk::Format findSupportedFormat(const vector<vk::Format>& candidates, vk::ImageTiling tiling, vk::FormatFeatureFlags features);
         
-
         Context context;
         Instance instance                                   = nullptr;
         PhysicalDevice physicalDevice                       = nullptr;
@@ -125,6 +128,7 @@ class Graphics {
         vk::raii::ImageView    textureImageView             = nullptr;
         vk::raii::Sampler      textureSampler               = nullptr;
         vk::raii::DeviceMemory textureImageMemory           = nullptr;
+        uint32_t               textureMipCount;
 
         vk::raii::Image        depthImage                   = nullptr;
         vk::raii::DeviceMemory depthImageMemory             = nullptr;

@@ -1,13 +1,15 @@
 #ifndef GRAPHICS_MODELS_HPP
 #define GRAPHICS_MODELS_HPP
  
-
 #include <vulkan/vulkan_raii.hpp>
 // Forces GLM to use a type versions with alignment requirements that are
 // compatible with Vulkan specification: https://docs.vulkan.org/spec/latest/chapters/interfaces.html#interfaces-resources-layout
 // #define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
+
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/hash.hpp>
 
 #include <array>
 
@@ -44,7 +46,19 @@ struct Vertex {
              .offset   = offsetof(Vertex, texCoord)}
         }};
     }
+
+    bool operator==(const Vertex& other) const {
+        return pos == other.pos && color == other.color && texCoord == other.texCoord;
+    }
 };
+
+namespace std {
+    template<> struct hash<Vertex> {
+        size_t operator()(Vertex const& vertex) const {
+            return ((hash<glm::vec3>()(vertex.pos) ^ (hash<glm::vec3>()(vertex.color) << 1)) >> 1) ^ (hash<glm::vec2>()(vertex.texCoord) << 1);
+        }
+    };
+}
 
 // UniformBuffer struct with explicit alignment specifier (C++11)
 struct UniformBufferObject {
