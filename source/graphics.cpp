@@ -26,6 +26,7 @@ Graphics::Graphics() {
     createLogicalDevice();
     
     swapChain        = SwapChain(surface, physicalDevice, device);
+
     graphicsPipeline = GraphicsPipeline(device, swapChain.getExtent(), swapChain.getSurfaceFormat(), findDepthFormat());
 
     createCommandPool();
@@ -36,8 +37,16 @@ Graphics::Graphics() {
     createTextureImage();
     createTextureSampler();
     createUniformBuffers();
-    createDescriptorPool();
-    createDescriptorSets();
+
+    vk::DescriptorImageInfo imageInfo {
+        .sampler     = textureSampler,
+        .imageView   = textureImageView,
+        .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
+    };
+
+    graphicsPipeline.createDescriptorPool(device);
+    graphicsPipeline.createDescriptorSets(device, uniformBuffers, imageInfo);
+    
     createCommandBuffers();
     createSyncObjects();
 }
@@ -623,7 +632,7 @@ void Graphics::createTextureSampler() {
         .maxAnisotropy              = properties.limits.maxSamplerAnisotropy,
         .compareEnable              = vk::False,
         .compareOp                  = vk::CompareOp::eAlways,
-        .minLod                     = static_cast<float>(textureMipCount / 2),
+        .minLod                     = 0,
         .maxLod                     = vk::LodClampNone,
         .borderColor                = vk::BorderColor::eIntOpaqueBlack,
         .unnormalizedCoordinates    = vk::False
@@ -659,67 +668,6 @@ void Graphics::createUniformBuffers() {
         uniformBuffers.emplace_back(std::move(buffer));
         uniformBuffersMemory.emplace_back(std::move(bufferMem));
         uniformBuffersMapped.emplace_back(uniformBuffersMemory.back().mapMemory(0, bufferSize));
-    }
-}
-
-void Graphics::createDescriptorPool() {
-    std::array<vk::DescriptorPoolSize, 2> poolSize {{
-        { .type            = vk::DescriptorType::eUniformBuffer,
-          .descriptorCount = MAX_FRAMES_IN_FLIGHT },
-        { .type            = vk::DescriptorType::eCombinedImageSampler,
-          .descriptorCount = MAX_FRAMES_IN_FLIGHT}
-    }};
-
-    vk::DescriptorPoolCreateInfo poolInfo {
-        .flags           = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
-        .maxSets         = MAX_FRAMES_IN_FLIGHT,
-        .poolSizeCount   = static_cast<uint32_t>(poolSize.size()),
-        .pPoolSizes      = poolSize.data()
-    };
-
-    descriptorPool = DescriptorPool(device, poolInfo);
-}
-
-void Graphics::createDescriptorSets() {
-    vector<vk::DescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, *graphicsPipeline.getDescriptorSetLayout());
-    vk::DescriptorSetAllocateInfo allocInfo {
-        .descriptorPool         = descriptorPool,
-        .descriptorSetCount     = static_cast<uint32_t>(layouts.size()),
-        .pSetLayouts            = layouts.data()
-    };
-
-    descriptorSets = device.allocateDescriptorSets(allocInfo);
-
-    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        vk::DescriptorBufferInfo bufferInfo {
-            .buffer = uniformBuffers[i],
-            .offset = 0,
-            .range  = sizeof(UniformBufferObject)
-        };
-
-        vk::DescriptorImageInfo imageInfo {
-            .sampler     = textureSampler,
-            .imageView   = textureImageView,
-            .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
-        };
-
-        std::array<vk::WriteDescriptorSet, 2> descriptorWrites {{
-            { .dstSet                 = descriptorSets[i],
-              .dstBinding             = 0,
-              .dstArrayElement        = 0,
-              .descriptorCount        = 1,
-              .descriptorType         = vk::DescriptorType::eUniformBuffer,
-              .pBufferInfo            = &bufferInfo },
-            
-            { .dstSet                 = descriptorSets[i],
-              .dstBinding             = 1,
-              .dstArrayElement        = 0,
-              .descriptorCount        = 1,
-              .descriptorType         = vk::DescriptorType::eCombinedImageSampler,
-              .pImageInfo             = &imageInfo }
-        }};
-
-        device.updateDescriptorSets(descriptorWrites, {});
     }
 }
 
@@ -899,7 +847,7 @@ void Graphics::recordCommandBuffer(uint32_t imageIndex) {
     commandBuffers[frameIndex].setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapChain.getExtent()));
     commandBuffers[frameIndex].bindVertexBuffers(0, *vertexBuffer, {0});
     commandBuffers[frameIndex].bindIndexBuffer(*indexBuffer, 0, vk::IndexTypeValue<decltype(indices)::value_type>::value);
-    commandBuffers[frameIndex].bindDescriptorSets(vk::PipelineBindPoint::eGraphics, graphicsPipeline.getPipelineLayout(), 0, *descriptorSets[frameIndex], nullptr);
+    commandBuffers[frameIndex].bindDescriptorSets(vk::PipelineBindPoint::eGraphics, graphicsPipeline.getPipelineLayout(), 0, *graphicsPipeline.getDescriptorSet(frameIndex), nullptr);
     commandBuffers[frameIndex].drawIndexed(static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
     commandBuffers[frameIndex].endRendering();
 

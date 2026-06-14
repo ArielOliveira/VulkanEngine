@@ -40,8 +40,6 @@ using vk::ImageLayout;
 using vk::AccessFlags2;
 using vk::PipelineStageFlags2;
 
-constexpr int MAX_FRAMES_IN_FLIGHT = 2;
-
 const std::string MODEL_PATH   = "models/viking_room.obj";
 const std::string TEXTURE_PATH = "textures/viking_room.png";
 
@@ -122,7 +120,6 @@ class Graphics {
         Buffer indexBuffer                                  = nullptr;
         DeviceMemory vertexBufferMemory                     = nullptr;
         DeviceMemory indexBufferMemory                      = nullptr;
-        DescriptorPool descriptorPool                       = nullptr;
 
         vk::raii::Image        textureImage                 = nullptr;
         vk::raii::ImageView    textureImageView             = nullptr;
@@ -136,8 +133,6 @@ class Graphics {
 
         vector<Vertex> vertices;
         vector<uint32_t> indices;
-
-        vector<DescriptorSet> descriptorSets;
 
         vector<Buffer>       uniformBuffers;
         vector<DeviceMemory> uniformBuffersMemory;

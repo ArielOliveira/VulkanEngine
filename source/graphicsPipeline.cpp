@@ -155,20 +155,27 @@ GraphicsPipeline::GraphicsPipeline(const Device &device, const Extent2D &swapCha
     }; 
 
     pipeline = vk::raii::Pipeline(device, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+
+
 }
 
 GraphicsPipeline::GraphicsPipeline(std::nullptr_t) noexcept {}
 GraphicsPipeline::~GraphicsPipeline() {}
 
 GraphicsPipeline& GraphicsPipeline::operator=(std::nullptr_t) noexcept {
-    pipeline.clear();
-    pipeline = nullptr;
+    descriptorSets.clear();
 
-    pipelineLayout.clear();
-    pipelineLayout = nullptr;
+    descriptorPool.clear();
+    descriptorPool = nullptr;
 
     descriptorSetLayout.clear();
     descriptorSetLayout = nullptr;
+
+    pipelineLayout.clear();
+    pipelineLayout = nullptr;
+    
+    pipeline.clear();
+    pipeline = nullptr;
 
     return *this;
 }
@@ -176,3 +183,64 @@ GraphicsPipeline& GraphicsPipeline::operator=(std::nullptr_t) noexcept {
 const vk::raii::Pipeline& GraphicsPipeline::getInstance() const & { return pipeline; }
 const PipelineLayout&      GraphicsPipeline::getPipelineLayout() const & { return pipelineLayout; }
 const DescriptorSetLayout& GraphicsPipeline::getDescriptorSetLayout() const & { return descriptorSetLayout; }
+const DescriptorSet& GraphicsPipeline::getDescriptorSet(uint32_t frameIndex) const {
+    if (frameIndex < 0 || frameIndex > descriptorSets.size()-1)
+        throw std::runtime_error("out of bounds!");
+
+        return descriptorSets[frameIndex];
+}
+
+void GraphicsPipeline::createDescriptorPool(const Device &device) {
+    std::array<vk::DescriptorPoolSize, 2> poolSize {{
+        { .type            = vk::DescriptorType::eUniformBuffer,
+          .descriptorCount = MAX_FRAMES_IN_FLIGHT },
+        { .type            = vk::DescriptorType::eCombinedImageSampler,
+          .descriptorCount = MAX_FRAMES_IN_FLIGHT}
+    }};
+
+    vk::DescriptorPoolCreateInfo poolInfo {
+        .flags           = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
+        .maxSets         = MAX_FRAMES_IN_FLIGHT,
+        .poolSizeCount   = static_cast<uint32_t>(poolSize.size()),
+        .pPoolSizes      = poolSize.data()
+    };
+
+    descriptorPool = DescriptorPool(device, poolInfo);
+}
+
+void GraphicsPipeline::createDescriptorSets(const Device &device, const vector<vk::raii::Buffer> &uniformBuffers, const vk::DescriptorImageInfo &imageInfo) {
+    vector<vk::DescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, descriptorSetLayout);
+    vk::DescriptorSetAllocateInfo allocInfo {
+        .descriptorPool         = descriptorPool,
+        .descriptorSetCount     = static_cast<uint32_t>(layouts.size()),
+        .pSetLayouts            = layouts.data()
+    };
+
+    descriptorSets = device.allocateDescriptorSets(allocInfo);
+
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        vk::DescriptorBufferInfo bufferInfo {
+            .buffer = uniformBuffers[i],
+            .offset = 0,
+            .range  = sizeof(UniformBufferObject)
+        };
+
+        std::array<vk::WriteDescriptorSet, 2> descriptorWrites {{
+            { .dstSet                 = descriptorSets[i],
+              .dstBinding             = 0,
+              .dstArrayElement        = 0,
+              .descriptorCount        = 1,
+              .descriptorType         = vk::DescriptorType::eUniformBuffer,
+              .pBufferInfo            = &bufferInfo },
+            
+            { .dstSet                 = descriptorSets[i],
+              .dstBinding             = 1,
+              .dstArrayElement        = 0,
+              .descriptorCount        = 1,
+              .descriptorType         = vk::DescriptorType::eCombinedImageSampler,
+              .pImageInfo             = &imageInfo }
+        }};
+
+        device.updateDescriptorSets(descriptorWrites, {});
+    }
+}

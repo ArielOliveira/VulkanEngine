@@ -15,6 +15,8 @@
 
 using std::array;
 
+constexpr int MAX_FRAMES_IN_FLIGHT = 2;
+
 struct Vertex {
     glm::vec3 pos;
     glm::vec3 color;
@@ -67,7 +69,7 @@ struct UniformBufferObject {
     alignas(16) glm::mat4 proj;
 };
 
-const std::vector<Vertex> planeVertices = {
+const std::vector<Vertex> quadVertices = {
     {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
     {{ 0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
     {{ 0.5f,  0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
@@ -79,7 +81,7 @@ const std::vector<Vertex> planeVertices = {
     {{-0.5f,  0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}
 };
 
-const std::vector<uint16_t> planeIndices  = {
+const std::vector<uint16_t> quadIndices  = {
     0, 1, 2, 2, 3, 0,
     4, 5, 6, 6, 7, 4
 };
