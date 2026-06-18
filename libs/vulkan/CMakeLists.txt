@@ -3,7 +3,7 @@ find_package(Vulkan REQUIRED)
 add_library(${LIB_VULKAN})
 add_library(Vulkan::cppm ALIAS ${LIB_VULKAN})
 
-add_definitions(-DENABLE_CPP20_MODULE=OFF)
+add_definitions(-DENABLE_CPP20_MODULE=ON)
 
 target_compile_definitions(${LIB_VULKAN} PUBLIC
         VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1

@@ -1,7 +1,9 @@
 #ifndef GRAPHICS_MODELS_HPP
 #define GRAPHICS_MODELS_HPP
  
+#define VULKAN_HPP_HANDLE_ERROR_OUT_OF_DATE_AS_SUCCESS
 #include <vulkan/vulkan_raii.hpp>
+
 // Forces GLM to use a type versions with alignment requirements that are
 // compatible with Vulkan specification: https://docs.vulkan.org/spec/latest/chapters/interfaces.html#interfaces-resources-layout
 // #define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
@@ -67,6 +69,11 @@ struct UniformBufferObject {
     alignas(16) glm::mat4 model;
     alignas(16) glm::mat4 view;
     alignas(16) glm::mat4 proj;
+};
+
+enum CommandIntentHint {
+    GRAPHICS = 0,
+    TRANSFER = 1
 };
 
 const std::vector<Vertex> quadVertices = {

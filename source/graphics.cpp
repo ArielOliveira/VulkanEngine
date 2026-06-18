@@ -1,7 +1,7 @@
 #include <graphics.hpp>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
+//#define STB_IMAGE_IMPLEMENTATION
+//#include <stb_image.h>
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
@@ -26,7 +26,6 @@ Graphics::Graphics() {
     createLogicalDevice();
     
     swapChain        = SwapChain(surface, physicalDevice, device);
-
     graphicsPipeline = GraphicsPipeline(device, swapChain.getExtent(), swapChain.getSurfaceFormat(), findDepthFormat());
 
     createCommandPool();
@@ -34,18 +33,12 @@ Graphics::Graphics() {
     loadModel();
     createVertexBuffer();
     createIndexBuffer();
-    createTextureImage();
-    createTextureSampler();
+    //createTextureImage();
+    //createTextureSampler();
     createUniformBuffers();
 
-    vk::DescriptorImageInfo imageInfo {
-        .sampler     = textureSampler,
-        .imageView   = textureImageView,
-        .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
-    };
-
     graphicsPipeline.createDescriptorPool(device);
-    graphicsPipeline.createDescriptorSets(device, uniformBuffers, imageInfo);
+    graphicsPipeline.createDescriptorSets(device, uniformBuffers, { textureSampler, textureImageView, vk::ImageLayout::eShaderReadOnlyOptimal });
     
     createCommandBuffers();
     createSyncObjects();
@@ -345,8 +338,25 @@ void Graphics::createSyncObjects() {
 void Graphics::createDepthResources() {
     vk::Format depthFormat = findDepthFormat();
 
+     vk::ImageCreateInfo imageInfo {
+        .imageType         = vk::ImageType::e2D,
+        .format            = depthFormat,
+        .extent            = { swapChain.getExtent().width, swapChain.getExtent().height, 1 },
+        .mipLevels         = 1,
+        .arrayLayers       = 1,
+        .samples           = vk::SampleCountFlagBits::e1,
+        .tiling            = vk::ImageTiling::eOptimal,
+        .usage             = vk::ImageUsageFlagBits::eDepthStencilAttachment,
+        .sharingMode       = vk::SharingMode::eExclusive // fixing in exclusive mode for now
+    };
+
     std::tie(depthImage, depthImageMemory) = createImage(swapChain.getExtent().width, swapChain.getExtent().height, 1, depthFormat, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eDepthStencilAttachment, vk::MemoryPropertyFlagBits::eDeviceLocal);
     depthImageView                         = createImageView(depthImage, depthFormat, vk::ImageAspectFlagBits::eDepth, 1);
+    
+    //std::tie(depthImage, depthImageMemory) = Texture::createImage(imageInfo, vk::MemoryPropertyFlagBits::eDeviceLocal);
+    //std::cout << "Created image" << '\n';
+    //depthImageView                         = Texture::createImageView(*depthImage, depthFormat, vk::ImageAspectFlagBits::eDepth, 1);
+    //std::cout << "Created image view" << '\n';
 }
 
 void Graphics::loadModel() {
@@ -440,7 +450,7 @@ void Graphics::createIndexBuffer() {
     copyBuffer(stagingBuffer, indexBuffer, bufferSize);
 }
 
-void Graphics::createTextureImage() {
+/*void Graphics::createTextureImage() {
     int texWidth, texHeight, texChannels;
 
     stbi_uc *pixels             = stbi_load(TEXTURE_PATH.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
@@ -473,7 +483,7 @@ void Graphics::createTextureImage() {
         vk::MemoryPropertyFlagBits::eDeviceLocal
     );
 
-    CommandBuffer commandBuffer = beginSingleTimeCommand(transferQueueIndex == ~0 ? graphicsCommandPool : transferCommandPool);
+    CommandBuffer commandBuffer = beginSingleTimeCommand(true);
     transitionImageLayout(commandBuffer,                          *textureImage, 
                           {},                                     vk::ImageLayout::eTransferDstOptimal,
                           {},                                     vk::AccessFlagBits2::eTransferWrite,
@@ -493,11 +503,11 @@ void Graphics::createTextureImage() {
                           transferQueueIndex == ~0 ? vk::QueueFamilyIgnored : transferQueueIndex,
                           transferQueueIndex == ~0 ? vk::QueueFamilyIgnored : graphicsQueueIndex);
     
-    endSingleTimeCommand(std::move(commandBuffer), transferQueueIndex == ~0 ? graphicsQueue : transferQueue);
+    endSingleTimeCommand(std::move(commandBuffer), true);
     
     // If we used a dedicated transfer queue we need to acquire ownership in the graphics queue.
     if (transferQueueIndex != ~0) { 
-        CommandBuffer graphicsCommand = beginSingleTimeCommand(graphicsCommandPool);
+        CommandBuffer graphicsCommand = beginSingleTimeCommand(false);
         
         // Queue ownership acquisition from trasnferQueue->graphicsQueue
         transitionImageLayout(graphicsCommand, *textureImage,
@@ -506,9 +516,9 @@ void Graphics::createTextureImage() {
                               {},              vk::PipelineStageFlagBits2::eTransfer,
                               vk::ImageAspectFlagBits::eColor,
                               textureMipCount,
-                              transferQueueIndex == ~0 ? vk::QueueFamilyIgnored : transferQueueIndex,
-                              transferQueueIndex == ~0 ? vk::QueueFamilyIgnored : graphicsQueueIndex);
-        endSingleTimeCommand(std::move(graphicsCommand), graphicsQueue);
+                              transferQueueIndex,
+                              graphicsQueueIndex);
+        endSingleTimeCommand(std::move(graphicsCommand), false);
     }
 
     // Mipmap generation involves a blit call which needs to happen in a graphics queue
@@ -522,9 +532,9 @@ void Graphics::createTextureImage() {
         vk::MemoryPropertyFlagBits::eDeviceLocal);
 
     textureImageView = createImageView(*textureImage, vk::Format::eR8G8B8A8Srgb, vk::ImageAspectFlagBits::eColor, textureMipCount);
-}
+}*/
 
-void Graphics::generateMipmaps(const vk::Image &image, uint32_t texWidth, uint32_t texHeight, uint32_t mipLevels,
+/*void Graphics::generateMipmaps(const vk::Image &image, uint32_t texWidth, uint32_t texHeight, uint32_t mipLevels,
                                vk::Format imageFormat, vk::ImageTiling tiling, vk::ImageUsageFlags usageFlags, vk::MemoryPropertyFlagBits memoryType) {
     // Check if image format supports linear blit-ing
     vk::FormatProperties formatProperties = physicalDevice.getFormatProperties(imageFormat);
@@ -532,7 +542,7 @@ void Graphics::generateMipmaps(const vk::Image &image, uint32_t texWidth, uint32
     if (!(formatProperties.optimalTilingFeatures & vk::FormatFeatureFlagBits::eSampledImageFilterLinear)) 
         throw std::runtime_error("texture image format does not support linear blitting!");
     
-    CommandBuffer commandBuffer = beginSingleTimeCommand(graphicsCommandPool);
+    CommandBuffer commandBuffer = beginSingleTimeCommand(false);
 
     vk::ImageMemoryBarrier2 barrier = {
         .srcStageMask           = vk::PipelineStageFlagBits2::eTransfer, .srcAccessMask          = vk::AccessFlagBits2::eTransferWrite,
@@ -614,10 +624,10 @@ void Graphics::generateMipmaps(const vk::Image &image, uint32_t texWidth, uint32
 
     commandBuffer.pipelineBarrier2(dependencyInfo);
 
-    endSingleTimeCommand(std::move(commandBuffer), graphicsQueue);
-}
+    endSingleTimeCommand(std::move(commandBuffer), false);
+}*/
 
-void Graphics::createTextureSampler() {
+/*void Graphics::createTextureSampler() {
     vk::PhysicalDeviceProperties properties = physicalDevice.getProperties();
 
     vk::SamplerCreateInfo samplerInfo {
@@ -639,7 +649,7 @@ void Graphics::createTextureSampler() {
     };
 
     textureSampler = vk::raii::Sampler(device, samplerInfo);
-}
+}*/
 
 vk::raii::ImageView Graphics::createImageView(const vk::Image &image, vk::Format format, vk::ImageAspectFlagBits aspectMaskFlags, uint32_t mipLevels) {
     vk::ImageViewCreateInfo viewInfo {
@@ -671,7 +681,7 @@ void Graphics::createUniformBuffers() {
     }
 }
 
-vk::Format Graphics::findDepthFormat() {
+const vk::Format Graphics::findDepthFormat() const {
     return findSupportedFormat(
         {vk::Format::eD32Sfloat, vk::Format::eD32SfloatS8Uint, vk::Format::eD24UnormS8Uint},
          vk::ImageTiling::eOptimal,
@@ -679,7 +689,7 @@ vk::Format Graphics::findDepthFormat() {
     );
 }
 
-vk::Format Graphics::findSupportedFormat(const vector<vk::Format>& candidates, vk::ImageTiling tiling, vk::FormatFeatureFlags features) {
+const vk::Format Graphics::findSupportedFormat(const vector<vk::Format>& candidates, vk::ImageTiling tiling, vk::FormatFeatureFlags features) const {
     for (const auto format : candidates) {
         vk::FormatProperties props = physicalDevice.getFormatProperties(format);
 
@@ -742,9 +752,9 @@ std::pair<vk::raii::Image, DeviceMemory> Graphics::createImage(uint32_t width, u
 }
 
 void Graphics::copyBuffer(Buffer &srcBuffer, Buffer &dstBuffer, vk::DeviceSize size) {
-    CommandBuffer copyCommandBuffer = beginSingleTimeCommand(transferCommandPool);
+    CommandBuffer copyCommandBuffer = beginSingleTimeCommand(true);
     copyCommandBuffer.copyBuffer(*srcBuffer, *dstBuffer, vk::BufferCopy(0, 0, size));
-    endSingleTimeCommand(std::move(copyCommandBuffer), transferQueue);
+    endSingleTimeCommand(std::move(copyCommandBuffer), true);
 }
 
 void Graphics::copyBufferToImage(CommandBuffer &commandBuffer, const Buffer &buffer, const vk::Image &image, uint32_t width, uint32_t height) {
@@ -767,7 +777,12 @@ void Graphics::copyBufferToImage(CommandBuffer &commandBuffer, const Buffer &buf
     commandBuffer.copyBufferToImage2(copyInfo);
 }
 
-CommandBuffer Graphics::beginSingleTimeCommand(const CommandPool &commandPool) {
+CommandBuffer Graphics::beginSingleTimeCommand(bool isTransferOnly) {
+    const CommandPool& commandPool = 
+        isTransferOnly && transferQueueIndex != ~0 ?
+        transferCommandPool :
+        graphicsCommandPool;
+
     vk::CommandBufferAllocateInfo allocInfo{.commandPool = commandPool, .level = vk::CommandBufferLevel::ePrimary, .commandBufferCount = 1};
     vk::raii::CommandBuffer       commandBuffer = std::move(vk::raii::CommandBuffers(device, allocInfo).front());
 
@@ -777,8 +792,10 @@ CommandBuffer Graphics::beginSingleTimeCommand(const CommandPool &commandPool) {
     return std::move(commandBuffer);
 }
 
-void Graphics::endSingleTimeCommand(CommandBuffer &&commandBuffer, const Queue &queue) {
+void Graphics::endSingleTimeCommand(CommandBuffer &&commandBuffer, bool isTransferOnly) {
     commandBuffer.end();
+
+    const Queue& queue = isTransferOnly && transferQueueIndex != ~0 ? transferQueue : graphicsQueue;
 
     vk::SubmitInfo submitInfo{.commandBufferCount = 1, .pCommandBuffers = &*commandBuffer};
     queue.submit(submitInfo, nullptr);
@@ -1005,8 +1022,12 @@ void Graphics::drawFrame() {
 }
 
 const Device& Graphics::getDevice() const & { return device; }
+const PhysicalDevice& Graphics::getPhysicalDevice() const & { return physicalDevice; }
+const uint32_t Graphics::getGraphicsQueueIndex() const { return graphicsQueueIndex; }
+const uint32_t Graphics::getTransferQueueIndex() const { return transferQueueIndex; }
+const bool    Graphics::hasDedicatedTransferQueue() const { return transferQueueIndex != ~0; }
 
-uint32_t Graphics::findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFlags properties) {
+const uint32_t Graphics::findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFlags properties) const {
     vk::PhysicalDeviceMemoryProperties memProperties = physicalDevice.getMemoryProperties();
 
     for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {

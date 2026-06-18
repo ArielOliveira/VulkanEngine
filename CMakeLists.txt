@@ -1,11 +1,13 @@
 cmake_minimum_required(VERSION 4.3.1)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(LIB_DIR "${CMAKE_CURRENT_LIST_DIR}/libs")
 set(INCLUDE_DIR "${CMAKE_CURRENT_LIST_DIR}/include")
 set(SRC_DIR "${CMAKE_CURRENT_LIST_DIR}/source")
 set(SHADERS_DIR "${CMAKE_CURRENT_LIST_DIR}/shaders")
 
-file(GLOB ALL_SOURCES ${SRC_DIR}/*.cpp)
+file(GLOB_RECURSE ALL_SOURCES ${SRC_DIR}/*.cpp)
+#file(GLOB_RECURSE ALL_HEADERS ${INCLUDE_DIR}/*.hpp)
 
 ###### THIS ENABLES C++23 STD MODULES COMPILATION FOR CMAKE VERSION 4.3.1 ######
 set(CMAKE_EXPERIMENTAL_CXX_IMPORT_STD 451f2fe2-a8a2-47c3-bc32-94786d8fc91b)
@@ -19,8 +21,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 ################################################################################
 
 project(VulkanEngine LANGUAGES CXX VERSION 0.0.1.0)
-
-include_directories(include ${PROJECT_BINARY_DIR})
 
 configure_file(${INCLUDE_DIR}/version.hpp.in ${PROJECT_BINARY_DIR}/version.hpp)
 
@@ -36,11 +36,11 @@ find_package(glm CONFIG REQUIRED)
 add_subdirectory(${LIB_DIR}/glfw)
 add_subdirectory(${LIB_DIR}/vulkan)
 
-add_executable(${PROJECT_NAME} ${ALL_SOURCES}
-    include/tiny_obj_loader.h)
+add_executable(${PROJECT_NAME} ${ALL_SOURCES})
 
 target_link_libraries(${PROJECT_NAME} PRIVATE glfw Vulkan::cppm glm::glm)
-target_compile_definitions(${PROJECT_NAME} PRIVATE CMAKE_EXPORT_COMPILE_COMMANDS=1)
+target_include_directories(${PROJECT_NAME} PRIVATE ${INCLUDE_DIR} ${PROJECT_BINARY_DIR})
+target_compile_definitions(${PROJECT_NAME} PRIVATE)
 
 compile_slang_shaders(SHADERS ${SHADERS_DIR} "${PROJECT_BINARY_DIR}/$<CONFIG>")
 add_dependencies(${PROJECT_NAME} SHADERS)

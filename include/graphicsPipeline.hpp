@@ -4,8 +4,6 @@
 #include <graphicsModels.hpp>
 #include <fileHelper.hpp>
 
-#include <vulkan\vulkan_raii.hpp>
-
 using std::move;
 using std::swap;
 

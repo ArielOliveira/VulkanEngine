@@ -12,9 +12,9 @@ enum Monitor {
 };
 
 struct WindowParameters {
-    unsigned width = 800, height = 600;
-    const char* title = "VulkanEngine";
-    unsigned monitor = 0;
+    unsigned width      = 800, height = 600;
+    unsigned monitor    = 0;
+    const char* title   = "VulkanEngine";
     void* sharedContext = nullptr;
 };
 

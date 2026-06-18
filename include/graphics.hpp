@@ -1,16 +1,14 @@
 #ifndef GRAPHICS_HPP
 #define GRAPHICS_HPP
 
-#define VULKAN_HPP_HANDLE_ERROR_OUT_OF_DATE_AS_SUCCESS
-
 #include <application.hpp>
 #include <version.hpp>
 #include <config.hpp>
-#include <swapChain.hpp>
+
 #include <graphicsPipeline.hpp>
+#include <swapChain.hpp>
 
 #include <iostream>
-#include <vulkan/vulkan_raii.hpp>
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -33,8 +31,6 @@ using vk::raii::Semaphore;
 using vk::raii::Fence;
 using vk::raii::Buffer;
 using vk::raii::DeviceMemory;
-using vk::raii::DescriptorPool;
-using vk::raii::DescriptorSet;
 
 using vk::ImageLayout;
 using vk::AccessFlags2;
@@ -50,61 +46,31 @@ class Graphics {
         Graphics(const Graphics&) = delete;
         Graphics(Graphics&&) noexcept = delete;
 
-        ~Graphics();
-
         Graphics& operator=(const Graphics&) = delete;
         Graphics& operator=(Graphics&&) noexcept = delete;
+
+        ~Graphics();
 
         void drawFrame();
 
         const Device& getDevice() const &;
-    private:
-        Graphics();
+        const PhysicalDevice& getPhysicalDevice() const &;
 
-        void createInstance();
-        void pickPhysicalDevice();
-        void createLogicalDevice();
-        void createSurface();
-        void createCommandPool();
-        void createCommandBuffers();
-        void createSyncObjects();
-        void createDepthResources();
-        void loadModel();
-        void createVertexBuffer();
-        void createIndexBuffer();
-        void createTextureImage();
-        void createTextureSampler();
-        void createUniformBuffers();
-        void createDescriptorPool();
-        void createDescriptorSets();
-        void recordCommandBuffer(uint32_t imageIndex);
-        void updateUniformBuffer(uint32_t imageIndex);
-
-        void transitionImageLayout(const CommandBuffer &commandBuffer, const vk::Image &image,
-                                   ImageLayout oldL, ImageLayout newL, 
-                                   AccessFlags2 srcAccessMask, AccessFlags2 dstAccessMask,
-                                   PipelineStageFlags2 srcStageMask, PipelineStageFlags2 dstStageMask,
-                                   vk::ImageAspectFlagBits imageAspectFlags,
-                                   uint32_t mipLevels,
-                                   uint32_t srcQueue = vk::QueueFamilyIgnored, uint32_t dstQueue = vk::QueueFamilyIgnored);
+        std::pair<Buffer, DeviceMemory> createBuffer(vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, vk::SharingMode sharingMode = vk::SharingMode::eExclusive, uint32_t queueCount = 0, const uint32_t* queueIndices = nullptr);
         
-        void generateMipmaps(const vk::Image &image, uint32_t texWidth, uint32_t texHeight, uint32_t mipLevels,
-                             vk::Format imageFormat, vk::ImageTiling tiling, vk::ImageUsageFlags usageFlags, vk::MemoryPropertyFlagBits memoryType);
-
         void copyBuffer(Buffer &srcBuffer, Buffer &dstBuffer, vk::DeviceSize size); 
         void copyBufferToImage(CommandBuffer &commandBuffer, const Buffer &buffer, const vk::Image &image, uint32_t width, uint32_t height);
         
-        CommandBuffer beginSingleTimeCommand(const CommandPool &commandPool);
-        void endSingleTimeCommand(CommandBuffer &&commandBuffer, const Queue &queue);
-            
-        std::pair<Buffer, DeviceMemory> createBuffer(vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, vk::SharingMode sharingMode = vk::SharingMode::eExclusive, uint32_t queueCount = 0, const uint32_t* queueIndices = nullptr);
-        std::pair<vk::raii::Image, DeviceMemory> createImage(uint32_t width, uint32_t height, uint32_t mipLevels, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties, vk::SharingMode sharingMode = vk::SharingMode::eExclusive, uint32_t queueCount = 0, const uint32_t* queueIndices = nullptr);
-        vk::raii::ImageView createImageView(const vk::Image &image, vk::Format format, vk::ImageAspectFlagBits aspectMaskFlags, uint32_t mipLevels);
-        const bool isDeviceSuitable(const PhysicalDevice &physicalDevice) const;
-        uint32_t findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFlags properties);
-        vk::Format findDepthFormat();
-        vk::Format findSupportedFormat(const vector<vk::Format>& candidates, vk::ImageTiling tiling, vk::FormatFeatureFlags features);
+        CommandBuffer beginSingleTimeCommand(bool isTransferOnly);
+        void endSingleTimeCommand(CommandBuffer &&commandBuffer, bool isTransferOnly);
+
+        const uint32_t getGraphicsQueueIndex() const;
+        const uint32_t getTransferQueueIndex() const;
+        const uint32_t findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFlags properties) const;
+        const bool     hasDedicatedTransferQueue() const;
         
+        const vk::Format findDepthFormat() const;
+    private:
         Context context;
         Instance instance                                   = nullptr;
         PhysicalDevice physicalDevice                       = nullptr;
@@ -146,6 +112,41 @@ class Graphics {
         uint32_t graphicsQueueIndex               = ~0;
         uint32_t transferQueueIndex               = ~0;
         uint32_t frameIndex                       =  0;
+
+        Graphics();
+
+        void createInstance();
+        void pickPhysicalDevice();
+        void createLogicalDevice();
+        void createSurface();
+        void createCommandPool();
+        void createCommandBuffers();
+        void createSyncObjects();
+        void createDepthResources();
+        void loadModel();
+        void createVertexBuffer();
+        void createIndexBuffer();
+        void createTextureImage();
+        void createTextureSampler();
+        void createUniformBuffers();
+        void recordCommandBuffer(uint32_t imageIndex);
+        void updateUniformBuffer(uint32_t imageIndex);
+
+        void transitionImageLayout(const CommandBuffer &commandBuffer, const vk::Image &image,
+                                   ImageLayout oldL, ImageLayout newL, 
+                                   AccessFlags2 srcAccessMask, AccessFlags2 dstAccessMask,
+                                   PipelineStageFlags2 srcStageMask, PipelineStageFlags2 dstStageMask,
+                                   vk::ImageAspectFlagBits imageAspectFlags,
+                                   uint32_t mipLevels,
+                                   uint32_t srcQueue = vk::QueueFamilyIgnored, uint32_t dstQueue = vk::QueueFamilyIgnored);
+        
+        void generateMipmaps(const vk::Image &image, uint32_t texWidth, uint32_t texHeight, uint32_t mipLevels,
+                             vk::Format imageFormat, vk::ImageTiling tiling, vk::ImageUsageFlags usageFlags, vk::MemoryPropertyFlagBits memoryType);
+            
+        std::pair<vk::raii::Image, DeviceMemory> createImage(uint32_t width, uint32_t height, uint32_t mipLevels, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties, vk::SharingMode sharingMode = vk::SharingMode::eExclusive, uint32_t queueCount = 0, const uint32_t* queueIndices = nullptr);
+        vk::raii::ImageView createImageView(const vk::Image &image, vk::Format format, vk::ImageAspectFlagBits aspectMaskFlags, uint32_t mipLevels);
+        const bool isDeviceSuitable(const PhysicalDevice &physicalDevice) const;
+        const vk::Format findSupportedFormat(const vector<vk::Format>& candidates, vk::ImageTiling tiling, vk::FormatFeatureFlags features) const;
 
         const std::vector<char const*> validationLayers = {
             "VK_LAYER_KHRONOS_validation"

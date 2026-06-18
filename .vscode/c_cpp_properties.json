@@ -3,9 +3,7 @@
         {
             "name": "Win32",
             "includePath": [
-                "${workspaceFolder}/source/**",
                 "${workspaceFolder}/include/**",
-                "${workspaceFolder}/shaders/**",
                 "${VULKAN_SDK}/Include/**",
                 "${GLM_LIB}/include/**"
             ],
