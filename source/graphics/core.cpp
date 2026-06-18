@@ -302,7 +302,8 @@ namespace Graphics {
         throw std::runtime_error("failed to find suitable memory type!"); 
     }
     
-    const vk::raii::Device& Core::getDevice() const & { return device; }
+    const vk::raii::SurfaceKHR&     Core::getSurface()             const & { return surface; }
+    const vk::raii::Device&         Core::getDevice() const & { return device; }
     const vk::raii::PhysicalDevice& Core::getPhysicalDevice() const & { return physicalDevice; }
     const vk::raii::CommandPool&    Core::getTransferCommandPool() const & { return transferQueueIndex != vk::QueueFamilyIgnored ? transferCommandPool : graphicsCommandPool; }
     const vk::raii::CommandPool&    Core::getGraphicsCommandPool() const & { return graphicsCommandPool; }

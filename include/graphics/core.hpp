@@ -8,8 +8,6 @@
 
 using std::cout;
 
-//#include <swapChain.hpp>
-
 namespace Graphics {
     class Core {
         public:
@@ -29,12 +27,13 @@ namespace Graphics {
             const vk::Format findSupportedFormat(const vector<vk::Format>& candidates, vk::ImageTiling tiling, vk::FormatFeatureFlags features) const;
             const uint32_t   findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFlags properties) const;
 
+            const vk::raii::SurfaceKHR&     getSurface()             const &;
             const vk::raii::Device&         getDevice()              const &;
             const vk::raii::PhysicalDevice& getPhysicalDevice()      const &;
             const vk::raii::CommandPool&    getTransferCommandPool() const &;
             const vk::raii::CommandPool&    getGraphicsCommandPool() const &;
-            const vk::raii::Queue&          getTransferQueue() const &;
-            const vk::raii::Queue&          getGraphicsQueue() const &;
+            const vk::raii::Queue&          getTransferQueue()       const &;
+            const vk::raii::Queue&          getGraphicsQueue()       const &;
 
             const uint32_t getGraphicsQueueIndex() const;
             const uint32_t getTransferQueueIndex() const;
@@ -50,8 +49,6 @@ namespace Graphics {
              
             vk::raii::CommandPool graphicsCommandPool                     = nullptr;
             vk::raii::CommandPool transferCommandPool                     = nullptr; // Using dedicated pools for short-lived command buffers allow for certain optimizations.
-
-            //SwapChain swapChain                                           = nullptr;
 
             uint32_t graphicsQueueIndex               = vk::QueueFamilyIgnored;
             uint32_t transferQueueIndex               = vk::QueueFamilyIgnored;

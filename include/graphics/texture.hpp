@@ -1,5 +1,5 @@
-#ifndef TEXTURE_HPP
-#define TEXTURE_HPP
+#ifndef GRAPHICS_TEXTURE_HPP
+#define GRAPHICS_TEXTURE_HPP
 
 #include <graphics/core.hpp>
 #include <graphics/commandBuffer.hpp>

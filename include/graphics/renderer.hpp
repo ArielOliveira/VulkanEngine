@@ -1,5 +1,11 @@
-#ifndef RENDERER_HPP
-#define RENDERER_HPP
+#ifndef GRAPHICS_RENDERER_HPP
+#define GRAPHICS_RENDERER_HPP
+
+#include <vulkan/vulkan_raii.hpp>
+
+#include <graphics/core.hpp>
+#include <graphics/pipeline.hpp>
+#include <graphics/swapChain.hpp>
 
 namespace Graphics {
     class Renderer {
@@ -12,8 +18,13 @@ namespace Graphics {
             Renderer& operator=(const Renderer&) = delete;
             Renderer& operator=(Renderer&&) noexcept = delete;
 
+            void drawFrame();
+
             ~Renderer();
         private:
+            SwapChain swapChain = nullptr;
+            Pipeline  pipeline  = nullptr;
+
             Renderer();
 
     };

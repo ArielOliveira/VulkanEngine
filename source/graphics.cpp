@@ -1,20 +1,17 @@
 #include <graphics.hpp>
 
-//#define STB_IMAGE_IMPLEMENTATION
-//#include <stb_image.h>
-
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
 
 #include <unordered_map>
 
-Graphics& Graphics::getInstance() {
-    static Graphics instance;
+OldGraphics& OldGraphics::getInstance() {
+    static OldGraphics instance;
 
     return instance;
 }
 
-Graphics::Graphics() {
+OldGraphics::OldGraphics() {
     cout << "Initializing graphics..." << endl;
 
     createInstance();
@@ -26,7 +23,7 @@ Graphics::Graphics() {
     createLogicalDevice();
     
     swapChain        = SwapChain(surface, physicalDevice, device);
-    graphicsPipeline = GraphicsPipeline(device, swapChain.getExtent(), swapChain.getSurfaceFormat(), findDepthFormat());
+    graphicsPipeline = Graphics::Pipeline(device, swapChain.getExtent(), swapChain.getSurfaceFormat(), findDepthFormat());
 
     createCommandPool();
     createDepthResources();
@@ -44,9 +41,9 @@ Graphics::Graphics() {
     createSyncObjects();
 }
 
-Graphics::~Graphics() {}
+OldGraphics::~OldGraphics() {}
 
-void Graphics::createInstance() {
+void OldGraphics::createInstance() {
     Application& app = Application::getInstance();
 
     const vk::ApplicationInfo appInfo {
@@ -116,7 +113,7 @@ void Graphics::createInstance() {
     }
 }
 
-const bool Graphics::isDeviceSuitable(PhysicalDevice const& physicalDevice) const {
+const bool OldGraphics::isDeviceSuitable(PhysicalDevice const& physicalDevice) const {
     auto queueFamilies = physicalDevice.getQueueFamilyProperties();
 
     bool supportsVulkan1_3 = physicalDevice.getProperties().apiVersion >= vk::ApiVersion13;
@@ -166,7 +163,7 @@ const bool Graphics::isDeviceSuitable(PhysicalDevice const& physicalDevice) cons
     return supportsVulkan1_3 && supportsGraphicsAndPresentation && supportsAllRequiredExtensions && supportsRequiredFeatures;
 }
 
-void Graphics::pickPhysicalDevice() {
+void OldGraphics::pickPhysicalDevice() {
     auto physicalDevices = instance.enumeratePhysicalDevices();
 
     auto const deviceIt = 
@@ -182,7 +179,7 @@ void Graphics::pickPhysicalDevice() {
 }
 
 #if DEBUG_MODE
-void Graphics::setupDebugMessenger() {
+void OldGraphics::setupDebugMessenger() {
     vk::DebugUtilsMessageSeverityFlagsEXT severityFlags(
         vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
         vk::DebugUtilsMessageSeverityFlagBitsEXT::eError
@@ -203,7 +200,7 @@ void Graphics::setupDebugMessenger() {
 }
 #endif
 
-void Graphics::createLogicalDevice() {
+void OldGraphics::createLogicalDevice() {
     vector<vk::QueueFamilyProperties> queueFamilyProperties = physicalDevice.getQueueFamilyProperties();
     
     bool foundGraphicsAndPresentation = false;
@@ -285,7 +282,7 @@ void Graphics::createLogicalDevice() {
         transferQueue = Queue(device, transferQueueIndex, 0);
 }
 
-void Graphics::createSurface() {
+void OldGraphics::createSurface() {
     VkSurfaceKHR _surface;
 
     if (glfwCreateWindowSurface(*instance, Application::getInstance().getWindow(), nullptr, &_surface) != 0) 
@@ -294,7 +291,7 @@ void Graphics::createSurface() {
     surface = SurfaceKHR(instance, _surface);
 }
 
-void Graphics::createCommandPool() {
+void OldGraphics::createCommandPool() {
     vk::CommandPoolCreateInfo graphicsPoolInfo {
         .flags              = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
         .queueFamilyIndex   = graphicsQueueIndex
@@ -313,29 +310,29 @@ void Graphics::createCommandPool() {
     transferCommandPool = CommandPool(device, transferPoolInfo);
 }
 
-void Graphics::createCommandBuffers() {
+void OldGraphics::createCommandBuffers() {
     vk::CommandBufferAllocateInfo allocInfo {
         .commandPool        = graphicsCommandPool,
         .level              = vk::CommandBufferLevel::ePrimary,
-        .commandBufferCount = MAX_FRAMES_IN_FLIGHT
+        .commandBufferCount = Graphics::Models::MAX_FRAMES_IN_FLIGHT
     };
 
     commandBuffers = vk::raii::CommandBuffers(device, allocInfo);
 }
 
-void Graphics::createSyncObjects() {
+void OldGraphics::createSyncObjects() {
     assert(presentCompleteSemaphores.empty() && renderFinishedSemaphores.empty() && inFlightFences.empty());
 
     for (size_t i = 0; i < swapChain.getImageCount(); i++)
         renderFinishedSemaphores.emplace_back(device, vk::SemaphoreCreateInfo());
     
-    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    for (size_t i = 0; i < Graphics::Models::MAX_FRAMES_IN_FLIGHT; i++) {
         presentCompleteSemaphores.emplace_back(device, vk::SemaphoreCreateInfo());
         inFlightFences.emplace_back(device, vk::FenceCreateInfo{.flags = vk::FenceCreateFlagBits::eSignaled});
     }
 }
 
-void Graphics::createDepthResources() {
+void OldGraphics::createDepthResources() {
     vk::Format depthFormat = findDepthFormat();
 
      vk::ImageCreateInfo imageInfo {
@@ -359,7 +356,7 @@ void Graphics::createDepthResources() {
     //std::cout << "Created image view" << '\n';
 }
 
-void Graphics::loadModel() {
+void OldGraphics::loadModel() {
     tinyobj::attrib_t attrib;
     vector<tinyobj::shape_t> shapes;
     vector<tinyobj::material_t> materials;
@@ -369,11 +366,11 @@ void Graphics::loadModel() {
         throw std::runtime_error(err);
 
 
-    std::unordered_map<Vertex, uint32_t> uniqueVertices{};
+    std::unordered_map<Graphics::Models::Vertex, uint32_t> uniqueVertices{};
 
     for (const auto& shape : shapes) {
         for (const auto& index : shape.mesh.indices) {
-            Vertex vertex{};
+            Graphics::Models::Vertex vertex{};
 
             vertex.pos = {
                 attrib.vertices[3 * index.vertex_index + 0],
@@ -398,7 +395,7 @@ void Graphics::loadModel() {
     }
 }
 
-void Graphics::createVertexBuffer() {
+void OldGraphics::createVertexBuffer() {
     std::array<uint32_t, 2> queueFamilyIndices = { graphicsQueueIndex, transferQueueIndex };
     vk::DeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
 
@@ -424,7 +421,7 @@ void Graphics::createVertexBuffer() {
     copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
 }
 
-void Graphics::createIndexBuffer() {
+void OldGraphics::createIndexBuffer() {
     std::array<uint32_t, 2> queueFamilyIndices = { graphicsQueueIndex, transferQueueIndex };
     vk::DeviceSize bufferSize = sizeof(indices[0]) * indices.size();
 
@@ -450,7 +447,7 @@ void Graphics::createIndexBuffer() {
     copyBuffer(stagingBuffer, indexBuffer, bufferSize);
 }
 
-/*void Graphics::createTextureImage() {
+/*void OldGraphics::createTextureImage() {
     int texWidth, texHeight, texChannels;
 
     stbi_uc *pixels             = stbi_load(TEXTURE_PATH.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
@@ -534,7 +531,7 @@ void Graphics::createIndexBuffer() {
     textureImageView = createImageView(*textureImage, vk::Format::eR8G8B8A8Srgb, vk::ImageAspectFlagBits::eColor, textureMipCount);
 }*/
 
-/*void Graphics::generateMipmaps(const vk::Image &image, uint32_t texWidth, uint32_t texHeight, uint32_t mipLevels,
+/*void OldGraphics::generateMipmaps(const vk::Image &image, uint32_t texWidth, uint32_t texHeight, uint32_t mipLevels,
                                vk::Format imageFormat, vk::ImageTiling tiling, vk::ImageUsageFlags usageFlags, vk::MemoryPropertyFlagBits memoryType) {
     // Check if image format supports linear blit-ing
     vk::FormatProperties formatProperties = physicalDevice.getFormatProperties(imageFormat);
@@ -627,7 +624,7 @@ void Graphics::createIndexBuffer() {
     endSingleTimeCommand(std::move(commandBuffer), false);
 }*/
 
-/*void Graphics::createTextureSampler() {
+/*void OldGraphics::createTextureSampler() {
     vk::PhysicalDeviceProperties properties = physicalDevice.getProperties();
 
     vk::SamplerCreateInfo samplerInfo {
@@ -651,7 +648,7 @@ void Graphics::createIndexBuffer() {
     textureSampler = vk::raii::Sampler(device, samplerInfo);
 }*/
 
-vk::raii::ImageView Graphics::createImageView(const vk::Image &image, vk::Format format, vk::ImageAspectFlagBits aspectMaskFlags, uint32_t mipLevels) {
+vk::raii::ImageView OldGraphics::createImageView(const vk::Image &image, vk::Format format, vk::ImageAspectFlagBits aspectMaskFlags, uint32_t mipLevels) {
     vk::ImageViewCreateInfo viewInfo {
     .image            = image,
     .viewType         = vk::ImageViewType::e2D,
@@ -661,11 +658,11 @@ vk::raii::ImageView Graphics::createImageView(const vk::Image &image, vk::Format
     return vk::raii::ImageView(device, viewInfo);
 }
 
-void Graphics::createUniformBuffers() {
+void OldGraphics::createUniformBuffers() {
     std::array<uint32_t, 2> queueFamilyIndices = { graphicsQueueIndex, transferQueueIndex };
 
-    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        vk::DeviceSize bufferSize = sizeof(UniformBufferObject);
+    for (size_t i = 0; i < Graphics::Models::MAX_FRAMES_IN_FLIGHT; i++) {
+        vk::DeviceSize bufferSize = sizeof(Graphics::Models::UniformBufferObject);
         auto [buffer, bufferMem] = createBuffer(
             bufferSize,
             vk::BufferUsageFlagBits::eUniformBuffer,
@@ -681,7 +678,7 @@ void Graphics::createUniformBuffers() {
     }
 }
 
-const vk::Format Graphics::findDepthFormat() const {
+const vk::Format OldGraphics::findDepthFormat() const {
     return findSupportedFormat(
         {vk::Format::eD32Sfloat, vk::Format::eD32SfloatS8Uint, vk::Format::eD24UnormS8Uint},
          vk::ImageTiling::eOptimal,
@@ -689,7 +686,7 @@ const vk::Format Graphics::findDepthFormat() const {
     );
 }
 
-const vk::Format Graphics::findSupportedFormat(const vector<vk::Format>& candidates, vk::ImageTiling tiling, vk::FormatFeatureFlags features) const {
+const vk::Format OldGraphics::findSupportedFormat(const vector<vk::Format>& candidates, vk::ImageTiling tiling, vk::FormatFeatureFlags features) const {
     for (const auto format : candidates) {
         vk::FormatProperties props = physicalDevice.getFormatProperties(format);
 
@@ -702,7 +699,7 @@ const vk::Format Graphics::findSupportedFormat(const vector<vk::Format>& candida
     throw std::runtime_error("failed to find supported format!");
 }
 
-std::pair<Buffer, DeviceMemory> Graphics::createBuffer(vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, vk::SharingMode sharingMode, uint32_t queueCount, const uint32_t* queueIndices) {
+std::pair<Buffer, DeviceMemory> OldGraphics::createBuffer(vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, vk::SharingMode sharingMode, uint32_t queueCount, const uint32_t* queueIndices) {
     vk::BufferCreateInfo bufferInfo {
         .size                   = size,
         .usage                  = usage,
@@ -724,7 +721,7 @@ std::pair<Buffer, DeviceMemory> Graphics::createBuffer(vk::DeviceSize size, vk::
     return { std::move(buffer), std::move(bufferMemory) };
 }
 
-std::pair<vk::raii::Image, DeviceMemory> Graphics::createImage(uint32_t width, uint32_t height, uint32_t mipLevels, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties, vk::SharingMode sharingMode, uint32_t queueCount, const uint32_t* queueIndices) {
+std::pair<vk::raii::Image, DeviceMemory> OldGraphics::createImage(uint32_t width, uint32_t height, uint32_t mipLevels, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties, vk::SharingMode sharingMode, uint32_t queueCount, const uint32_t* queueIndices) {
     vk::ImageCreateInfo imageInfo {
         .imageType         = vk::ImageType::e2D,
         .format            = format,
@@ -751,13 +748,13 @@ std::pair<vk::raii::Image, DeviceMemory> Graphics::createImage(uint32_t width, u
     return { std::move(image), std::move(imageMemory) };
 }
 
-void Graphics::copyBuffer(Buffer &srcBuffer, Buffer &dstBuffer, vk::DeviceSize size) {
+void OldGraphics::copyBuffer(Buffer &srcBuffer, Buffer &dstBuffer, vk::DeviceSize size) {
     CommandBuffer copyCommandBuffer = beginSingleTimeCommand(true);
     copyCommandBuffer.copyBuffer(*srcBuffer, *dstBuffer, vk::BufferCopy(0, 0, size));
     endSingleTimeCommand(std::move(copyCommandBuffer), true);
 }
 
-void Graphics::copyBufferToImage(CommandBuffer &commandBuffer, const Buffer &buffer, const vk::Image &image, uint32_t width, uint32_t height) {
+void OldGraphics::copyBufferToImage(CommandBuffer &commandBuffer, const Buffer &buffer, const vk::Image &image, uint32_t width, uint32_t height) {
     vk::BufferImageCopy2 region {
         .bufferOffset       = 0,
         .bufferRowLength    = 0,
@@ -777,7 +774,7 @@ void Graphics::copyBufferToImage(CommandBuffer &commandBuffer, const Buffer &buf
     commandBuffer.copyBufferToImage2(copyInfo);
 }
 
-CommandBuffer Graphics::beginSingleTimeCommand(bool isTransferOnly) {
+CommandBuffer OldGraphics::beginSingleTimeCommand(bool isTransferOnly) {
     const CommandPool& commandPool = 
         isTransferOnly && transferQueueIndex != ~0 ?
         transferCommandPool :
@@ -792,7 +789,7 @@ CommandBuffer Graphics::beginSingleTimeCommand(bool isTransferOnly) {
     return std::move(commandBuffer);
 }
 
-void Graphics::endSingleTimeCommand(CommandBuffer &&commandBuffer, bool isTransferOnly) {
+void OldGraphics::endSingleTimeCommand(CommandBuffer &&commandBuffer, bool isTransferOnly) {
     commandBuffer.end();
 
     const Queue& queue = isTransferOnly && transferQueueIndex != ~0 ? transferQueue : graphicsQueue;
@@ -802,7 +799,7 @@ void Graphics::endSingleTimeCommand(CommandBuffer &&commandBuffer, bool isTransf
     queue.waitIdle();
 }
 
-void Graphics::recordCommandBuffer(uint32_t imageIndex) {
+void OldGraphics::recordCommandBuffer(uint32_t imageIndex) {
     commandBuffers[frameIndex].begin({});
 
     transitionImageLayout(
@@ -890,7 +887,7 @@ void Graphics::recordCommandBuffer(uint32_t imageIndex) {
 // Note this is also being used to prepare an image to be sampled
 // in the fragment shader, effectively making the fragment stage wait for the 
 // image to be ready. VULKAN IS EXPLICIT!!!
-void Graphics::transitionImageLayout( 
+void OldGraphics::transitionImageLayout( 
                         const CommandBuffer &commandBuffer, const vk::Image &image,
                         ImageLayout oldL, ImageLayout newL, 
                         AccessFlags2 srcAccessMask, AccessFlags2 dstAccessMask,
@@ -926,13 +923,13 @@ void Graphics::transitionImageLayout(
     commandBuffer.pipelineBarrier2(dependencyInfo);
 }
 
-void Graphics::updateUniformBuffer(uint32_t frameIndex) {
+void OldGraphics::updateUniformBuffer(uint32_t frameIndex) {
     static auto startTime = std::chrono::high_resolution_clock::now();
 
     auto currentTime = std::chrono::high_resolution_clock::now();
     float time       = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
-    UniformBufferObject ubo{
+    Graphics::Models::UniformBufferObject ubo{
         .model = rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f)),
         .view  = lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f)),
         .proj  = glm::perspective(glm::radians(45.0f), static_cast<float>(swapChain.getExtent().width) / static_cast<float>(swapChain.getExtent().height), 0.1f, 10.0f)
@@ -944,7 +941,7 @@ void Graphics::updateUniformBuffer(uint32_t frameIndex) {
 }
 
 
-void Graphics::drawFrame() {
+void OldGraphics::drawFrame() {
     vk::Result fenceResult = device.waitForFences(*inFlightFences[frameIndex], vk::True, UINT64_MAX);
     
     if (fenceResult != vk::Result::eSuccess) 
@@ -1018,16 +1015,16 @@ void Graphics::drawFrame() {
 			break;        // an unexpected result is returned!
 	}
 
-    frameIndex = (frameIndex + 1) % MAX_FRAMES_IN_FLIGHT;
+    frameIndex = (frameIndex + 1) % Graphics::Models::MAX_FRAMES_IN_FLIGHT;
 }
 
-const Device& Graphics::getDevice() const & { return device; }
-const PhysicalDevice& Graphics::getPhysicalDevice() const & { return physicalDevice; }
-const uint32_t Graphics::getGraphicsQueueIndex() const { return graphicsQueueIndex; }
-const uint32_t Graphics::getTransferQueueIndex() const { return transferQueueIndex; }
-const bool    Graphics::hasDedicatedTransferQueue() const { return transferQueueIndex != ~0; }
+const Device& OldGraphics::getDevice() const & { return device; }
+const PhysicalDevice& OldGraphics::getPhysicalDevice() const & { return physicalDevice; }
+const uint32_t OldGraphics::getGraphicsQueueIndex() const { return graphicsQueueIndex; }
+const uint32_t OldGraphics::getTransferQueueIndex() const { return transferQueueIndex; }
+const bool    OldGraphics::hasDedicatedTransferQueue() const { return transferQueueIndex != ~0; }
 
-const uint32_t Graphics::findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFlags properties) const {
+const uint32_t OldGraphics::findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFlags properties) const {
     vk::PhysicalDeviceMemoryProperties memProperties = physicalDevice.getMemoryProperties();
 
     for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {

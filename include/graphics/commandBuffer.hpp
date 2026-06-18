@@ -2,7 +2,7 @@
 #define COMMAND_BUFFER_HPP
 
 #include <graphics/core.hpp>
-#include <graphicsModels.hpp>
+#include <graphics/models.hpp>
 #include <vector>
 
 using std::vector;

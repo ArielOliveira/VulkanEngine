@@ -5,8 +5,8 @@
 #include <version.hpp>
 #include <config.hpp>
 
-#include <graphicsPipeline.hpp>
-#include <swapChain.hpp>
+#include <graphics/pipeline.hpp>
+#include <graphics/swapChain.hpp>
 
 #include <iostream>
 
@@ -39,17 +39,19 @@ using vk::PipelineStageFlags2;
 const std::string MODEL_PATH   = "models/viking_room.obj";
 const std::string TEXTURE_PATH = "textures/viking_room.png";
 
-class Graphics {
+using Graphics::SwapChain;
+
+class OldGraphics {
     public:
-        static Graphics& getInstance();
+        static OldGraphics& getInstance();
 
-        Graphics(const Graphics&) = delete;
-        Graphics(Graphics&&) noexcept = delete;
+        OldGraphics(const OldGraphics&) = delete;
+        OldGraphics(OldGraphics&&) noexcept = delete;
 
-        Graphics& operator=(const Graphics&) = delete;
-        Graphics& operator=(Graphics&&) noexcept = delete;
+        OldGraphics& operator=(const OldGraphics&) = delete;
+        OldGraphics& operator=(OldGraphics&&) noexcept = delete;
 
-        ~Graphics();
+        ~OldGraphics();
 
         void drawFrame();
 
@@ -79,7 +81,7 @@ class Graphics {
         Queue transferQueue                                 = nullptr;
         SurfaceKHR surface                                  = nullptr;
         SwapChain swapChain                                 = nullptr;
-        GraphicsPipeline graphicsPipeline                   = nullptr;
+        Graphics::Pipeline graphicsPipeline                 = nullptr;
         CommandPool graphicsCommandPool                     = nullptr;
         CommandPool transferCommandPool                     = nullptr; // Using dedicated pools for short-lived command buffers allow for certain optimizations.
         Buffer vertexBuffer                                 = nullptr;
@@ -97,7 +99,7 @@ class Graphics {
         vk::raii::DeviceMemory depthImageMemory             = nullptr;
         vk::raii::ImageView    depthImageView               = nullptr;
 
-        vector<Vertex> vertices;
+        vector<Graphics::Models::Vertex> vertices;
         vector<uint32_t> indices;
 
         vector<Buffer>       uniformBuffers;
@@ -113,7 +115,7 @@ class Graphics {
         uint32_t transferQueueIndex               = ~0;
         uint32_t frameIndex                       =  0;
 
-        Graphics();
+        OldGraphics();
 
         void createInstance();
         void pickPhysicalDevice();
