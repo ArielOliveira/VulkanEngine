@@ -40,23 +40,86 @@ namespace Graphics {
             Core& core       = Core::getInstance();
             CommandBuffer cb = CommandBuffer::singleTimeTransferCommand();
             
-            updateImageLayout(cb, vk::ImageLayout::eTransferDstOptimal, vk::AccessFlagBits2::eTransferWrite, vk::PipelineStageFlagBits2::eTransfer, core.getTransferQueueIndex());
+            updateImageLayout(cb, vk::ImageLayout::eTransferDstOptimal, vk::AccessFlagBits2::eTransferWrite, vk::PipelineStageFlagBits2::eTransfer, core.getTransferQueueIndex(), 0, false);
             copyBufferToImage(cb, stagingBuffer);
             
             cb.dispatch();
 
             if (core.hasDedicatedTransferQueue()) {
                 CommandBuffer cb0 = CommandBuffer::singleTimeTransferCommand();
-                updateImageLayout(cb0, vk::ImageLayout::eTransferSrcOptimal, vk::AccessFlagBits2::eTransferRead, vk::PipelineStageFlagBits2::eTransfer, core.getGraphicsQueueIndex());
+                updateImageLayout(cb0, vk::ImageLayout::eTransferSrcOptimal, vk::AccessFlagBits2::eTransferRead, vk::PipelineStageFlagBits2::eTransfer, core.getGraphicsQueueIndex(), 0, false);
                 cb0.dispatch();
             }
 
-            generateMipmaps();
+            if (mipCount > 1)
+                generateMipmaps();
             createImageView();
+            
+            if (usageFlags & vk::ImageUsageFlagBits::eSampled)
+                createSampler();
+    }
+
+    Texture::Texture(const std::string& name, vk::Format format, vk::ImageTiling tiling, vk::ImageAspectFlags aspectFlags, vk::ImageUsageFlags usageFlags, uint32_t width, uint32_t height, uint32_t channels, bool generateMips) :
+        name(std::string(name)),
+        format(format),
+        tiling(tiling),
+        aspectFlags(aspectFlags),
+        usageFlags(usageFlags),
+        width(width),
+        height(height),
+        channels(channels) {
+        
+        mipCount = generateMips ? static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1 : 1;
+
+        createImage();
+        
+        if (mipCount > 1)
+            generateMipmaps();
+        
+        createImageView();
+
+        if (usageFlags & vk::ImageUsageFlagBits::eSampled)
             createSampler();
     }
 
-    Texture::~Texture() {
+    Texture Texture::createDepthBuffer(const SwapChain &swapChain) {
+        return std::move(Texture("DepthBuffer", Core::getInstance().findDepthFormat(), 
+                              vk::ImageTiling::eOptimal, vk::ImageAspectFlagBits::eDepth, vk::ImageUsageFlagBits::eDepthStencilAttachment,
+                              swapChain.getExtent().width, swapChain.getExtent().height, 1, false));
+    }
+
+    Texture::Texture(std::nullptr_t) noexcept {}
+
+    Texture& Texture::operator=(std::nullptr_t) noexcept { cleanUp(); return *this; }
+    
+    Texture& Texture::operator=(Texture&& rhs) {
+        if (this != &rhs) {
+            std::swap(name,              rhs.name);
+            std::swap(image,             rhs.image);
+            std::swap(imageView,         rhs.imageView);
+            std::swap(memory,            rhs.memory);
+            std::swap(sampler,           rhs.sampler);
+            std::swap(offset,            rhs.offset);
+            std::swap(format,            rhs.format);
+            std::swap(tiling,            rhs.tiling);
+            std::swap(aspectFlags,       rhs.aspectFlags);
+            std::swap(usageFlags,        rhs.usageFlags);
+            std::swap(currentLayout,     rhs.currentLayout);
+            std::swap(currentAccess,     rhs.currentAccess);
+            std::swap(currentStage,      rhs.currentStage);
+            std::swap(width,             rhs.width);
+            std::swap(height,            rhs.height);
+            std::swap(channels,          rhs.channels);
+            std::swap(mipCount,          rhs.mipCount);
+            std::swap(currentQueueIndex, rhs.currentQueueIndex);
+        }
+
+        return *this;
+    }
+
+    Texture::~Texture() { cleanUp(); }
+
+    void Texture::cleanUp() {
         sampler.clear();
         sampler = nullptr;
 
@@ -254,17 +317,23 @@ namespace Graphics {
         commandBuffer.copyBufferToImage(copyInfo);
     }
 
-    void Texture::updateImageLayout(const CommandBuffer &commandBuffer, const vk::ImageMemoryBarrier2 &barrier) {
+    void Texture::updateImageLayout(const CommandBuffer &commandBuffer, const vk::ImageMemoryBarrier2 &barrier, const uint32_t commandIndex) {
         vk::DependencyInfo dependencyInfo = {
             .dependencyFlags         = {},
             .imageMemoryBarrierCount = 1,
             .pImageMemoryBarriers    = &barrier
         };
 
-        commandBuffer.addBarrier(dependencyInfo);
+        commandBuffer.addBarrier(dependencyInfo, commandIndex);
     }
 
-    void Texture::updateImageLayout(const CommandBuffer &commandBuffer, vk::ImageLayout targetLayout, vk::AccessFlags2 targetAccess, vk::PipelineStageFlags2 targetStage, uint32_t targetQueue) {
+    void Texture::updateImageLayout(const CommandBuffer &commandBuffer, vk::ImageLayout targetLayout, vk::AccessFlags2 targetAccess, vk::PipelineStageFlags2 targetStage, uint32_t commandIndex, bool ignoreSourceLayout) {
+        updateImageLayout(commandBuffer, targetLayout, targetAccess, targetStage, currentQueueIndex, commandIndex, ignoreSourceLayout);
+    }
+    
+    void Texture::updateImageLayout(const CommandBuffer &commandBuffer, vk::ImageLayout targetLayout, vk::AccessFlags2 targetAccess, vk::PipelineStageFlags2 targetStage, uint32_t targetQueue, uint32_t commandIndex, bool ignoreSourceLayout) {
+        this->currentLayout = ignoreSourceLayout ? vk::ImageLayout::eUndefined : this->currentLayout;
+
         vk::ImageMemoryBarrier2 barrier {
             .srcStageMask           = this->currentStage,       .srcAccessMask          = this->currentAccess,
             .dstStageMask           = targetStage,              .dstAccessMask          = targetAccess,
@@ -281,10 +350,10 @@ namespace Graphics {
             barrier.srcQueueFamilyIndex = currentQueueIndex;
             barrier.dstQueueFamilyIndex = targetQueue;
 
-            updateImageLayout(commandBuffer, barrier);
+            updateImageLayout(commandBuffer, barrier, commandIndex);
         }
         
-        updateImageLayout(commandBuffer, barrier);
+        updateImageLayout(commandBuffer, barrier, commandIndex);
 
         currentQueueIndex = targetQueue;
     }

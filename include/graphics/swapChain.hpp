@@ -1,4 +1,5 @@
-#ifndef SWAP_CHAIN_MANAGER_HPP
+#ifndef GRAPHICS_SWAPCHAIN_HPP
+#define GRAPHICS_SWAPCHAIN_HPP
 
 #include <application/application.hpp>
 

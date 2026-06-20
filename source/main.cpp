@@ -18,7 +18,7 @@ int main(int argc, char** args) {
 
     while(!application.shouldClose()) {
         application.update();
-        //graphics.drawFrame();
+        renderer.drawFrame();
     }
 
     core.getDevice().waitIdle();

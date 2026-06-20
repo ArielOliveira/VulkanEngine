@@ -20,14 +20,16 @@ namespace Graphics {
             CommandBuffer& operator=(CommandBuffer&&) noexcept = default;
             CommandBuffer& operator=(std::nullptr_t) noexcept;
 
+            const vk::raii::CommandBuffer& operator[](int index) const;
+
             static CommandBuffer singleTimeTransferCommand();
             static CommandBuffer singleTimeGraphicsCommand();
 
             void addBarrier(const vk::DependencyInfo& info, uint32_t index = 0) const;
             void blit(const vk::BlitImageInfo2& info, uint32_t index = 0) const;
             void copyBufferToImage(const vk::CopyBufferToImageInfo2 &info, uint32_t index = 0) const;
-            void dispatch(uint32_t index = 0) const;
-            void dispatch(const vk::SubmitInfo &info, const vk::raii::Fence &fence, uint32_t index = 0) const;
+            void dispatch(uint32_t index = 0, bool waitBeforeDispatch = false) const;
+            void dispatch(const vk::SubmitInfo &info, const vk::raii::Fence &fence, uint32_t index = 0, bool waitBeforeDispatch = false) const;
         private:
             const vk::raii::Queue* queue;
 

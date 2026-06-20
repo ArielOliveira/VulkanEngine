@@ -6,9 +6,6 @@ namespace Graphics {
 
         vk::CommandBufferAllocateInfo allocInfo{.commandPool = commandPool, .level = level, .commandBufferCount = count};
         commands = vk::raii::CommandBuffers(Core::getInstance().getDevice(), allocInfo);
-        
-        for (auto &command : commands)
-            command.begin({});
     }
 
     CommandBuffer::CommandBuffer(const vk::raii::CommandPool& commandPool, const vk::raii::Queue* queue, vk::CommandBufferUsageFlags usageFlags, vk::CommandBufferLevel level, uint32_t count) {
@@ -59,11 +56,18 @@ namespace Graphics {
         return *this;
     }
 
+    const vk::raii::CommandBuffer& CommandBuffer::operator[](int index) const {
+        return commands[index];
+    }
+
     void CommandBuffer::addBarrier(const vk::DependencyInfo& info, uint32_t index) const { commands[index].pipelineBarrier2(info); }
     void CommandBuffer::blit(const vk::BlitImageInfo2& info, uint32_t index) const { commands[index].blitImage2(info); }
     void CommandBuffer::copyBufferToImage(const vk::CopyBufferToImageInfo2 &info, uint32_t index) const { commands[index].copyBufferToImage2(info); }
 
-    void CommandBuffer::dispatch(uint32_t index) const {
+    void CommandBuffer::dispatch(uint32_t index, bool waitBeforeDispatch) const {
+        if (waitBeforeDispatch)
+            queue->waitIdle();
+
         commands[index].end();
 
         vk::SubmitInfo info { 
@@ -75,7 +79,10 @@ namespace Graphics {
         queue->waitIdle();
     }
 
-    void CommandBuffer::dispatch(const vk::SubmitInfo &info, const vk::raii::Fence &fence, uint32_t index) const {
+    void CommandBuffer::dispatch(const vk::SubmitInfo &info, const vk::raii::Fence &fence, uint32_t index, bool waitBeforeDispatch) const {
+        if (waitBeforeDispatch)
+            queue->waitIdle();
+
         commands[index].end();
 
         queue->submit(info, *fence);

@@ -7,6 +7,7 @@
 #include <graphics/pipeline.hpp>
 #include <graphics/swapChain.hpp>
 #include <graphics/commandBuffer.hpp>
+#include <graphics/texture.hpp>
 
 #include <vector>
 
@@ -24,14 +25,16 @@ namespace Graphics {
             Renderer& operator=(Renderer&&) noexcept = delete;
 
             void createSyncObjects();
+            void recordRenderPass(uint32_t imageIndex);
 
             void drawFrame();
 
             ~Renderer();
         private:
-            SwapChain     swapChain  = nullptr;
-            Pipeline      pipeline   = nullptr;
-            CommandBuffer renderPass = nullptr;
+            SwapChain     swapChain   = nullptr;
+            Pipeline      pipeline    = nullptr;
+            CommandBuffer renderPass  = nullptr;
+            Texture       depthBuffer = nullptr;
 
             vector<vk::raii::Semaphore> presentCompleteSemaphores;
             vector<vk::raii::Semaphore> renderFinishedSemaphores;
