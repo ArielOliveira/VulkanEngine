@@ -13,10 +13,12 @@ namespace Graphics {
             CommandBuffer(const vk::raii::CommandPool& commandPool, const vk::raii::Queue* queue, vk::CommandBufferLevel level, uint32_t count = 1);
             CommandBuffer(const vk::raii::CommandPool& commandPool, const vk::raii::Queue* queue, vk::CommandBufferUsageFlags usageFlags, vk::CommandBufferLevel level, uint32_t count = 1);
             CommandBuffer(CommandBuffer &&rhs) = default;
+            CommandBuffer(std::nullptr_t) noexcept;
             ~CommandBuffer();
 
             CommandBuffer& operator=(const CommandBuffer&) = delete;
             CommandBuffer& operator=(CommandBuffer&&) noexcept = default;
+            CommandBuffer& operator=(std::nullptr_t) noexcept;
 
             static CommandBuffer singleTimeTransferCommand();
             static CommandBuffer singleTimeGraphicsCommand();

@@ -1,6 +1,6 @@
 #ifndef SWAP_CHAIN_MANAGER_HPP
 
-#include <application.hpp>
+#include <application/application.hpp>
 
 #include <iostream>
 #include <cstdint>

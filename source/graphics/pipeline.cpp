@@ -228,18 +228,18 @@ namespace Graphics {
 
             std::array<vk::WriteDescriptorSet, 2> descriptorWrites {{
                 { .dstSet                 = descriptorSets[i],
-                .dstBinding             = 0,
-                .dstArrayElement        = 0,
-                .descriptorCount        = 1,
-                .descriptorType         = vk::DescriptorType::eUniformBuffer,
-                .pBufferInfo            = &bufferInfo },
+                  .dstBinding             = 0,
+                  .dstArrayElement        = 0,
+                  .descriptorCount        = 1,
+                  .descriptorType         = vk::DescriptorType::eUniformBuffer,
+                  .pBufferInfo            = &bufferInfo },
                 
                 { .dstSet                 = descriptorSets[i],
-                .dstBinding             = 1,
-                .dstArrayElement        = 0,
-                .descriptorCount        = 1,
-                .descriptorType         = vk::DescriptorType::eCombinedImageSampler,
-                .pImageInfo             = &imageInfo }
+                  .dstBinding             = 1,
+                  .dstArrayElement        = 0,
+                  .descriptorCount        = 1,
+                  .descriptorType         = vk::DescriptorType::eCombinedImageSampler,
+                  .pImageInfo             = &imageInfo }
             }};
 
             device.updateDescriptorSets(descriptorWrites, {});

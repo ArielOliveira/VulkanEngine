@@ -37,26 +37,17 @@ namespace Graphics {
 
             createImage();
 
-            Core& core = Core::getInstance();
-            uint32_t graphicsQueueIndex = vk::QueueFamilyIgnored;
-            uint32_t transferQueueIndex = vk::QueueFamilyIgnored;
-
-            if (core.hasDedicatedTransferQueue()) {
-                graphicsQueueIndex = core.getGraphicsQueueIndex();
-                transferQueueIndex = core.getTransferQueueIndex();
-            }
-            
+            Core& core       = Core::getInstance();
             CommandBuffer cb = CommandBuffer::singleTimeTransferCommand();
             
-            updateImageLayout(cb, vk::ImageLayout::eTransferDstOptimal, vk::AccessFlagBits2::eTransferWrite, vk::PipelineStageFlagBits2::eTransfer);
+            updateImageLayout(cb, vk::ImageLayout::eTransferDstOptimal, vk::AccessFlagBits2::eTransferWrite, vk::PipelineStageFlagBits2::eTransfer, core.getTransferQueueIndex());
             copyBufferToImage(cb, stagingBuffer);
-            updateImageLayout(cb, vk::ImageLayout::eTransferSrcOptimal, {}, {}, core.getTransferQueueIndex(), core.getGraphicsQueueIndex());
             
             cb.dispatch();
 
             if (core.hasDedicatedTransferQueue()) {
                 CommandBuffer cb0 = CommandBuffer::singleTimeTransferCommand();
-                updateImageLayout(cb0, vk::ImageLayout::eTransferSrcOptimal, vk::AccessFlagBits2::eTransferRead, vk::PipelineStageFlagBits2::eTransfer, core.getTransferQueueIndex(), core.getGraphicsQueueIndex());
+                updateImageLayout(cb0, vk::ImageLayout::eTransferSrcOptimal, vk::AccessFlagBits2::eTransferRead, vk::PipelineStageFlagBits2::eTransfer, core.getGraphicsQueueIndex());
                 cb0.dispatch();
             }
 
@@ -83,11 +74,7 @@ namespace Graphics {
         Core&   core                     = Core::getInstance();
         const vk::raii::Device& device   = core.getDevice();
 
-        std::cout << "Creating Image: step 1" << '\n';
-
         vk::raii::Image image = vk::raii::Image(device, imageInfo);
-
-        std::cout << "Creating Image: step 2" << '\n';
 
         vk::MemoryRequirements memRequirements = image.getMemoryRequirements();
         vk::MemoryAllocateInfo allocInfo {
@@ -117,7 +104,7 @@ namespace Graphics {
         std::tie(image, memory) = createImage(imageInfo, vk::MemoryPropertyFlagBits::eDeviceLocal);
     }
 
-    vk::raii::ImageView Texture::createImageView(const vk::Image &image, vk::Format format, vk::ImageAspectFlagBits aspectMaskFlags, uint32_t mipLevels) {
+    vk::raii::ImageView Texture::createImageView(const vk::Image &image, vk::Format format, vk::ImageAspectFlags aspectMaskFlags, uint32_t mipLevels) {
         vk::ImageViewCreateInfo viewInfo {
         .image            = image,
         .viewType         = vk::ImageViewType::e2D,
@@ -127,14 +114,8 @@ namespace Graphics {
         return vk::raii::ImageView(Core::getInstance().getDevice(), viewInfo);
     }
 
-    void Texture::createImageView() {
-        vk::ImageViewCreateInfo viewInfo {
-        .image            = image,
-        .viewType         = vk::ImageViewType::e2D,
-        .format           = format,
-        .subresourceRange = {.aspectMask = aspectFlags, .baseMipLevel = 0, .levelCount = mipCount, .baseArrayLayer = 0, .layerCount = 1}};
-
-        imageView = vk::raii::ImageView(Core::getInstance().getDevice(), viewInfo);
+    void Texture::createImageView() {    
+        imageView = createImageView(*image, format, aspectFlags, mipCount);
     }
 
     void Texture::createSampler() {
@@ -283,15 +264,29 @@ namespace Graphics {
         commandBuffer.addBarrier(dependencyInfo);
     }
 
-    void Texture::updateImageLayout(const CommandBuffer &commandBuffer, vk::ImageLayout targetLayout, vk::AccessFlags2 targetAccess, vk::PipelineStageFlags2 targetStage, uint32_t sourceQueue, uint32_t targetQueue) {
-        updateImageLayout(commandBuffer, {
+    void Texture::updateImageLayout(const CommandBuffer &commandBuffer, vk::ImageLayout targetLayout, vk::AccessFlags2 targetAccess, vk::PipelineStageFlags2 targetStage, uint32_t targetQueue) {
+        vk::ImageMemoryBarrier2 barrier {
             .srcStageMask           = this->currentStage,       .srcAccessMask          = this->currentAccess,
             .dstStageMask           = targetStage,              .dstAccessMask          = targetAccess,
             .oldLayout              = this->currentLayout,      .newLayout              = targetLayout,
-            .srcQueueFamilyIndex    = sourceQueue,              .dstQueueFamilyIndex    = targetQueue,
+            .srcQueueFamilyIndex    = vk::QueueFamilyIgnored,   .dstQueueFamilyIndex    = vk::QueueFamilyIgnored,
             .image                  = image,
             .subresourceRange       = { .aspectMask = aspectFlags, .baseMipLevel = 0, .levelCount = (uint32_t)mipCount, .baseArrayLayer = 0, .layerCount = 1 }
-        });
+        };
+
+        // If image is already owned by a queue and we have a different target queue,
+        // then we need to make a queue ownership release first.
+        // TODO: This is not needed if vk::SharingMode::eConcurrent is used.
+        if ((currentQueueIndex != vk::QueueFamilyIgnored) && (currentQueueIndex != targetQueue)) {
+            barrier.srcQueueFamilyIndex = currentQueueIndex;
+            barrier.dstQueueFamilyIndex = targetQueue;
+
+            updateImageLayout(commandBuffer, barrier);
+        }
+        
+        updateImageLayout(commandBuffer, barrier);
+
+        currentQueueIndex = targetQueue;
     }
 
     const vk::raii::Image& Texture::getImage() const { return image; }

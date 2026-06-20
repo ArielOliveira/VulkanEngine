@@ -1,4 +1,4 @@
-#include <application.hpp>
+#include <application/application.hpp>
 
 Application& Application::getInstance() {
     static Application instance;

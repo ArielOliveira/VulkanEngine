@@ -1,7 +1,7 @@
 #ifndef GRAPHICS_HPP
 #define GRAPHICS_HPP
 
-#include <application.hpp>
+#include <application/application.hpp>
 #include <version.hpp>
 #include <config.hpp>
 

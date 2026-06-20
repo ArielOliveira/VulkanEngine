@@ -983,14 +983,14 @@ void OldGraphics::drawFrame() {
         .commandBufferCount   = 1,
         .pCommandBuffers      = &*commandBuffers[frameIndex],
         .signalSemaphoreCount = 1,
-        .pSignalSemaphores    = &*renderFinishedSemaphores[frameIndex]
+        .pSignalSemaphores    = &*renderFinishedSemaphores[imageIndex]
     };
 
     graphicsQueue.submit(submitInfo, *inFlightFences[frameIndex]);
 
     const vk::PresentInfoKHR presentInfo {
         .waitSemaphoreCount = 1,
-        .pWaitSemaphores    = &*renderFinishedSemaphores[frameIndex],
+        .pWaitSemaphores    = &*renderFinishedSemaphores[imageIndex],
         .swapchainCount     = 1,
         .pSwapchains        = &*swapChain.getInstance(),
         .pImageIndices      = &imageIndex
