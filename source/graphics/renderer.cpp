@@ -1,5 +1,10 @@
 #include <graphics/renderer.hpp>
 
+#define TINYOBJLOADER_IMPLEMENTATION
+#include <tiny_obj_loader.h>
+
+#include <unordered_map>
+
 namespace Graphics {
     Renderer& Renderer::getInstance() {
         static Renderer instance;
@@ -10,10 +15,23 @@ namespace Graphics {
     Renderer::Renderer() {
         const Core& core = Core::getInstance();
 
-        swapChain   = SwapChain(core.getSurface(), core.getPhysicalDevice(), core.getDevice());
-        pipeline    = Pipeline(core.getDevice(), swapChain.getExtent(), swapChain.getSurfaceFormat(), core.findDepthFormat());
-        renderPass  = CommandBuffer(core.getGraphicsCommandPool(), &core.getGraphicsQueue(), vk::CommandBufferLevel::ePrimary, Models::MAX_FRAMES_IN_FLIGHT);
-        depthBuffer = Texture::createDepthBuffer(swapChain);
+        swapChain    = SwapChain(core.getSurface(), core.getPhysicalDevice(), core.getDevice());
+        pipeline     = Pipeline(core.getDevice(), swapChain.getExtent(), swapChain.getSurfaceFormat(), core.findDepthFormat());
+        renderPass   = CommandBuffer(core.getGraphicsCommandPool(), &core.getGraphicsQueue(), vk::CommandBufferLevel::ePrimary, Models::MAX_FRAMES_IN_FLIGHT);
+        depthBuffer  = Texture::createDepthBuffer(swapChain);
+        modelTexture = Texture(std::string("viking_room.png"), 
+                               vk::Format::eR8G8B8A8Srgb, 
+                               vk::ImageTiling::eOptimal, 
+                               vk::ImageAspectFlagBits::eColor,
+                               vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled);
+
+        loadModel();
+        createVertexBuffer();
+        createIndexBuffer();
+        createUniformBuffers();
+
+        pipeline.createDescriptorPool(core.getDevice());
+        pipeline.createDescriptorSets(core.getDevice(), uniformBuffers, { modelTexture.getSampler(), modelTexture.getImageView(), vk::ImageLayout::eShaderReadOnlyOptimal });
 
         createSyncObjects();
     }
@@ -30,6 +48,133 @@ namespace Graphics {
             presentCompleteSemaphores.emplace_back(Core::getInstance().getDevice(), vk::SemaphoreCreateInfo());
             inFlightFences.emplace_back(Core::getInstance().getDevice(), vk::FenceCreateInfo{.flags = vk::FenceCreateFlagBits::eSignaled});
         }
+    }
+
+    void Renderer::loadModel() {
+        tinyobj::attrib_t attrib;
+        vector<tinyobj::shape_t> shapes;
+        vector<tinyobj::material_t> materials;
+        string                      err;
+
+        if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &err, Models::MODEL_PATH.c_str()))
+            throw std::runtime_error(err);
+
+        std::unordered_map<Graphics::Models::Vertex, uint32_t> uniqueVertices{};
+
+        for (const auto& shape : shapes) {
+            for (const auto& index : shape.mesh.indices) {
+                Graphics::Models::Vertex vertex{};
+
+                vertex.pos = {
+                    attrib.vertices[3 * index.vertex_index + 0],
+                    attrib.vertices[3 * index.vertex_index + 1],
+                    attrib.vertices[3 * index.vertex_index + 2]
+                };
+
+                vertex.texCoord = {
+                    attrib.texcoords[2 * index.texcoord_index + 0],
+                    1.0 - attrib.texcoords[2 * index.texcoord_index + 1]
+                };
+
+                auto [it, inserted] = uniqueVertices.insert({vertex, static_cast<uint32_t>(vertices.size())});
+
+                vertex.color = {1.0f, 1.0f, 1.0f};
+
+                if (inserted)  vertices.push_back(vertex);
+                indices.push_back(it->second);
+            }
+
+            cout << vertices.size() << " vertices loaded." << '\n';
+        }
+    }
+
+    void Renderer::createVertexBuffer() {
+        std::array<uint32_t, 2> queueFamilyIndices = { Core::getInstance().getGraphicsQueueIndex(), Core::getInstance().getTransferQueueIndex() };
+        vk::DeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+
+        auto [stagingBuffer, stagingBufferMemory]  = Core::getInstance().createBuffer(
+                bufferSize,
+                vk::BufferUsageFlagBits::eTransferSrc,
+                vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+        );
+
+        std::tie(vertexBuffer, vertexBufferMemory) = Core::getInstance().createBuffer(
+            bufferSize,
+            vk::BufferUsageFlagBits::eVertexBuffer       | vk::BufferUsageFlagBits::eTransferDst,
+            vk::MemoryPropertyFlagBits::eDeviceLocal,
+            Core::getInstance().hasDedicatedTransferQueue() ? vk::SharingMode::eConcurrent : vk::SharingMode::eExclusive,
+            Core::getInstance().getTransferQueueIndex(),
+            Core::getInstance().hasDedicatedTransferQueue() ? queueFamilyIndices.data()    : nullptr
+        );
+
+        void* data = stagingBufferMemory.mapMemory(0, bufferSize);
+        memcpy(data, vertices.data(), bufferSize);
+        stagingBufferMemory.unmapMemory();
+
+        CommandBuffer::singleTimeTransfer().copyBuffer(stagingBuffer, vertexBuffer, bufferSize).dispatch();
+    }
+
+    void Renderer::createIndexBuffer() {
+        std::array<uint32_t, 2> queueFamilyIndices = { Core::getInstance().getGraphicsQueueIndex(), Core::getInstance().getTransferQueueIndex() };
+        vk::DeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+
+        auto [stagingBuffer, stagingBufferMemory]  = Core::getInstance().createBuffer(
+                bufferSize,
+                vk::BufferUsageFlagBits::eTransferSrc,
+                vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+        );
+
+        void *data = stagingBufferMemory.mapMemory(0, bufferSize);
+        memcpy(data, indices.data(), (size_t)bufferSize);
+        stagingBufferMemory.unmapMemory();
+
+        std::tie(indexBuffer, indexBufferMemory) =  Core::getInstance().createBuffer(
+            bufferSize,
+            vk::BufferUsageFlagBits::eIndexBuffer        | vk::BufferUsageFlagBits::eTransferDst,
+            vk::MemoryPropertyFlagBits::eDeviceLocal,
+            Core::getInstance().hasDedicatedTransferQueue() ? vk::SharingMode::eConcurrent : vk::SharingMode::eExclusive,
+            Core::getInstance().getTransferQueueIndex(),
+            Core::getInstance().hasDedicatedTransferQueue() ? queueFamilyIndices.data()    : nullptr
+        );
+
+        CommandBuffer::singleTimeTransfer().copyBuffer(stagingBuffer, indexBuffer, bufferSize).dispatch();
+    }
+
+    void Renderer::createUniformBuffers() {
+        std::array<uint32_t, 2> queueFamilyIndices = { Core::getInstance().getGraphicsQueueIndex(), Core::getInstance().getTransferQueueIndex() };
+
+        for (size_t i = 0; i < Graphics::Models::MAX_FRAMES_IN_FLIGHT; i++) {
+            vk::DeviceSize bufferSize = sizeof(Graphics::Models::UniformBufferObject);
+            auto [buffer, bufferMem] = Core::getInstance().createBuffer(
+                bufferSize,
+                vk::BufferUsageFlagBits::eUniformBuffer,
+                vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+                Core::getInstance().hasDedicatedTransferQueue() ? vk::SharingMode::eConcurrent : vk::SharingMode::eExclusive,
+                Core::getInstance().getTransferQueueIndex(),
+                Core::getInstance().hasDedicatedTransferQueue() ? queueFamilyIndices.data()    : nullptr
+            );
+
+            uniformBuffers.emplace_back(std::move(buffer));
+            uniformBuffersMemory.emplace_back(std::move(bufferMem));
+            uniformBuffersMapped.emplace_back(uniformBuffersMemory.back().mapMemory(0, bufferSize));
+        }
+    }
+
+    void Renderer::updateUniformBuffer(uint32_t frameIndex) {
+        static auto startTime = std::chrono::high_resolution_clock::now();
+
+        auto currentTime = std::chrono::high_resolution_clock::now();
+        float time       = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+
+        Graphics::Models::UniformBufferObject ubo{
+            .model = rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f)),
+            .view  = lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f)),
+            .proj  = glm::perspective(glm::radians(45.0f), static_cast<float>(swapChain.getExtent().width) / static_cast<float>(swapChain.getExtent().height), 0.1f, 10.0f)
+        };
+
+        ubo.proj[1][1] *= -1;
+
+        memcpy(uniformBuffersMapped[frameIndex], &ubo, sizeof(ubo));
     }
 
     void Renderer::recordRenderPass(uint32_t imageIndex) {
@@ -82,6 +227,10 @@ namespace Graphics {
         renderPass[frameIndex].bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline.getInstance());
         renderPass[frameIndex].setViewport(0, vk::Viewport(0.0f, 0.0f, static_cast<float>(swapChain.getExtent().width), static_cast<float>(swapChain.getExtent().height), 0.0f, 1.0f));
         renderPass[frameIndex].setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapChain.getExtent()));
+        renderPass[frameIndex].bindVertexBuffers(0, *vertexBuffer, {0});
+        renderPass[frameIndex].bindIndexBuffer(*indexBuffer, 0, vk::IndexTypeValue<decltype(indices)::value_type>::value);
+        renderPass[frameIndex].bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipeline.getPipelineLayout(), 0, *pipeline.getDescriptorSet(frameIndex), nullptr);
+        renderPass[frameIndex].drawIndexed(static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
         renderPass[frameIndex].endRendering();
 
         colorBarrier.srcStageMask  = vk::PipelineStageFlagBits2::eColorAttachmentOutput; colorBarrier.dstStageMask  = vk::PipelineStageFlagBits2::eBottomOfPipe;
@@ -127,7 +276,7 @@ namespace Graphics {
 
         vk::PipelineStageFlags waitDestinationStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput);
         
-        //updateUniformBuffer(frameIndex);
+        updateUniformBuffer(frameIndex);
 
         const vk::SubmitInfo submitInfo {
             .waitSemaphoreCount   = 1,

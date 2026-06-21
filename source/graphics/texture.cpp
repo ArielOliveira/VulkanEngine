@@ -38,7 +38,7 @@ namespace Graphics {
             createImage();
 
             Core& core       = Core::getInstance();
-            CommandBuffer cb = CommandBuffer::singleTimeTransferCommand();
+            CommandBuffer cb = CommandBuffer::singleTimeTransfer();
             
             updateImageLayout(cb, vk::ImageLayout::eTransferDstOptimal, vk::AccessFlagBits2::eTransferWrite, vk::PipelineStageFlagBits2::eTransfer, core.getTransferQueueIndex(), 0, false);
             copyBufferToImage(cb, stagingBuffer);
@@ -46,7 +46,7 @@ namespace Graphics {
             cb.dispatch();
 
             if (core.hasDedicatedTransferQueue()) {
-                CommandBuffer cb0 = CommandBuffer::singleTimeTransferCommand();
+                CommandBuffer cb0 = CommandBuffer::singleTimeTransfer();
                 updateImageLayout(cb0, vk::ImageLayout::eTransferSrcOptimal, vk::AccessFlagBits2::eTransferRead, vk::PipelineStageFlagBits2::eTransfer, core.getGraphicsQueueIndex(), 0, false);
                 cb0.dispatch();
             }
@@ -212,7 +212,7 @@ namespace Graphics {
         if (!(formatProperties.optimalTilingFeatures & vk::FormatFeatureFlagBits::eSampledImageFilterLinear)) 
             throw std::runtime_error("texture image format does not support linear blitting!");
         
-        CommandBuffer commandBuffer = CommandBuffer::singleTimeGraphicsCommand();
+        CommandBuffer commandBuffer = CommandBuffer::singleTimeGraphics();
 
         vk::ImageMemoryBarrier2 barrier = {
             .srcStageMask           = vk::PipelineStageFlagBits2::eTransfer, .srcAccessMask          = vk::AccessFlagBits2::eTransferWrite,

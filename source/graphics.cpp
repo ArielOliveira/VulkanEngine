@@ -1,7 +1,7 @@
 #include <graphics.hpp>
 
-#define TINYOBJLOADER_IMPLEMENTATION
-#include <tiny_obj_loader.h>
+//#define TINYOBJLOADER_IMPLEMENTATION
+//#include <tiny_obj_loader.h>
 
 #include <unordered_map>
 
@@ -27,7 +27,7 @@ OldGraphics::OldGraphics() {
 
     createCommandPool();
     createDepthResources();
-    loadModel();
+    //loadModel();
     createVertexBuffer();
     createIndexBuffer();
     //createTextureImage();
@@ -356,13 +356,13 @@ void OldGraphics::createDepthResources() {
     //std::cout << "Created image view" << '\n';
 }
 
-void OldGraphics::loadModel() {
+/*void OldGraphics::loadModel() {
     tinyobj::attrib_t attrib;
     vector<tinyobj::shape_t> shapes;
     vector<tinyobj::material_t> materials;
     string                      err;
 
-    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &err, MODEL_PATH.c_str()))
+    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &err, Graphics::Models::MODEL_PATH.c_str()))
         throw std::runtime_error(err);
 
 
@@ -393,7 +393,7 @@ void OldGraphics::loadModel() {
 
         cout << vertices.size() << " vertices loaded." << '\n';
     }
-}
+}*/
 
 void OldGraphics::createVertexBuffer() {
     std::array<uint32_t, 2> queueFamilyIndices = { graphicsQueueIndex, transferQueueIndex };

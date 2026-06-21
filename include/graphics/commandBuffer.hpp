@@ -22,12 +22,13 @@ namespace Graphics {
 
             const vk::raii::CommandBuffer& operator[](int index) const;
 
-            static CommandBuffer singleTimeTransferCommand();
-            static CommandBuffer singleTimeGraphicsCommand();
+            static CommandBuffer singleTimeTransfer();
+            static CommandBuffer singleTimeGraphics();
 
-            void addBarrier(const vk::DependencyInfo& info, uint32_t index = 0) const;
-            void blit(const vk::BlitImageInfo2& info, uint32_t index = 0) const;
-            void copyBufferToImage(const vk::CopyBufferToImageInfo2 &info, uint32_t index = 0) const;
+            const CommandBuffer& addBarrier(const vk::DependencyInfo& info, uint32_t index = 0) const;
+            const CommandBuffer& blit(const vk::BlitImageInfo2& info, uint32_t index = 0) const;
+            const CommandBuffer& copyBuffer(vk::raii::Buffer &src, vk::raii::Buffer &dst, vk::DeviceSize size, uint32_t index = 0) const;
+            const CommandBuffer& copyBufferToImage(const vk::CopyBufferToImageInfo2 &info, uint32_t index = 0) const;
             void dispatch(uint32_t index = 0, bool waitBeforeDispatch = false) const;
             void dispatch(const vk::SubmitInfo &info, const vk::raii::Fence &fence, uint32_t index = 0, bool waitBeforeDispatch = false) const;
         private:

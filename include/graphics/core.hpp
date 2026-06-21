@@ -1,8 +1,9 @@
 #ifndef CORE_HPP
 #define CORE_HPP
 
-#include <application/application.hpp>
 #include <vulkan/vulkan_raii.hpp>
+
+#include <application/application.hpp>
 
 #include <iostream>
 

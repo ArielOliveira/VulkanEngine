@@ -335,6 +335,7 @@ namespace Graphics {
         debugMessenger = instance.createDebugUtilsMessengerEXT(debugUtilsMessengerCreateInfoEXT);
     }
 #endif
+
     std::pair<vk::raii::Buffer, vk::raii::DeviceMemory> Core::createBuffer(vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, vk::SharingMode sharingMode, uint32_t queueCount, const uint32_t* queueIndices) {
         vk::BufferCreateInfo bufferInfo {
             .size                   = size,

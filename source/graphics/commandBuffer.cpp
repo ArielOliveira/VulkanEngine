@@ -20,14 +20,14 @@ namespace Graphics {
             command.begin(beginInfo);
     }
 
-    CommandBuffer CommandBuffer::singleTimeTransferCommand() {
+    CommandBuffer CommandBuffer::singleTimeTransfer() {
         const Core& core = Core::getInstance();
 
         return std::move(CommandBuffer(core.getTransferCommandPool(), &core.getTransferQueue(), 
                              vk::CommandBufferUsageFlagBits::eOneTimeSubmit, vk::CommandBufferLevel::ePrimary));
     }
     
-    CommandBuffer CommandBuffer::singleTimeGraphicsCommand() {
+    CommandBuffer CommandBuffer::singleTimeGraphics() {
         const Core& core = Core::getInstance();
 
         return std::move(CommandBuffer(core.getGraphicsCommandPool(), &core.getGraphicsQueue(), 
@@ -60,9 +60,10 @@ namespace Graphics {
         return commands[index];
     }
 
-    void CommandBuffer::addBarrier(const vk::DependencyInfo& info, uint32_t index) const { commands[index].pipelineBarrier2(info); }
-    void CommandBuffer::blit(const vk::BlitImageInfo2& info, uint32_t index) const { commands[index].blitImage2(info); }
-    void CommandBuffer::copyBufferToImage(const vk::CopyBufferToImageInfo2 &info, uint32_t index) const { commands[index].copyBufferToImage2(info); }
+    const CommandBuffer& CommandBuffer::addBarrier(const vk::DependencyInfo& info, uint32_t index) const { commands[index].pipelineBarrier2(info); return *this; }
+    const CommandBuffer& CommandBuffer::blit(const vk::BlitImageInfo2& info, uint32_t index) const { commands[index].blitImage2(info); return *this; }
+    const CommandBuffer& CommandBuffer::copyBuffer(vk::raii::Buffer &src, vk::raii::Buffer &dst, vk::DeviceSize size, uint32_t index) const { commands[index].copyBuffer(src, dst, vk::BufferCopy(0, 0, size)); return *this; }
+    const CommandBuffer& CommandBuffer::copyBufferToImage(const vk::CopyBufferToImageInfo2 &info, uint32_t index) const { commands[index].copyBufferToImage2(info); return *this; }
 
     void CommandBuffer::dispatch(uint32_t index, bool waitBeforeDispatch) const {
         if (waitBeforeDispatch)

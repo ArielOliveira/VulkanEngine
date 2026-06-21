@@ -36,9 +36,6 @@ using vk::ImageLayout;
 using vk::AccessFlags2;
 using vk::PipelineStageFlags2;
 
-const std::string MODEL_PATH   = "models/viking_room.obj";
-const std::string TEXTURE_PATH = "textures/viking_room.png";
-
 using Graphics::SwapChain;
 
 class OldGraphics {
@@ -125,7 +122,7 @@ class OldGraphics {
         void createCommandBuffers();
         void createSyncObjects();
         void createDepthResources();
-        void loadModel();
+        //void loadModel();
         void createVertexBuffer();
         void createIndexBuffer();
         void createTextureImage();
