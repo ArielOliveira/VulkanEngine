@@ -2,7 +2,7 @@
 #define GRAPHICS_PIPELINE_HPP
 
 #include <graphics/models.hpp>
-#include <fileHelper.hpp>
+#include <application/fileHelper.hpp>
 
 using std::move;
 using std::swap;
@@ -13,7 +13,7 @@ namespace Graphics {
             Pipeline() = delete;
             ~Pipeline();
 
-            Pipeline(const vk::raii::Device &device, const vk::Extent2D &swapChain, const vk::SurfaceFormatKHR &swapChainSurfaceFormat, vk::Format depthFormat);
+            Pipeline(const vk::raii::Device &device, const vk::Extent2D &swapChain, const vk::SurfaceFormatKHR &swapChainSurfaceFormat, vk::Format depthFormat, vk::SampleCountFlagBits msaaSamples = vk::SampleCountFlagBits::e1);
 
             Pipeline(const Pipeline&) = delete;
             Pipeline(Pipeline &&other) noexcept = default;

@@ -1,7 +1,7 @@
 #include <graphics/texture.hpp>
 
 #define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
+#include <application/stb_image.h>
 
 namespace Graphics {
     Texture::Texture(const std::string& name, vk::Format format, vk::ImageTiling tiling, vk::ImageAspectFlags aspectFlags, vk::ImageUsageFlags usageFlags) :
@@ -59,12 +59,32 @@ namespace Graphics {
                 createSampler();
     }
 
+    Texture::Texture(const std::string& name, vk::Format format, vk::ImageTiling tiling, vk::ImageAspectFlags aspectFlags, vk::ImageUsageFlags usageFlags, vk::SampleCountFlagBits msaaSamples, uint32_t width, uint32_t height, uint32_t channels, bool generateMips) :
+        name(std::string(name)),
+        format(format),
+        tiling(tiling),
+        aspectFlags(aspectFlags),
+        usageFlags(usageFlags),
+        msaaSamples(msaaSamples),
+        width(width),
+        height(height),
+        channels(channels) { 
+
+        mipCount = generateMips ? static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1 : 1;
+
+        createImage();
+        generateMipmaps();
+        createImageView();
+        createSampler();
+    }
+
     Texture::Texture(const std::string& name, vk::Format format, vk::ImageTiling tiling, vk::ImageAspectFlags aspectFlags, vk::ImageUsageFlags usageFlags, uint32_t width, uint32_t height, uint32_t channels, bool generateMips) :
         name(std::string(name)),
         format(format),
         tiling(tiling),
         aspectFlags(aspectFlags),
         usageFlags(usageFlags),
+        msaaSamples(vk::SampleCountFlagBits::e1),
         width(width),
         height(height),
         channels(channels) {
@@ -72,19 +92,22 @@ namespace Graphics {
         mipCount = generateMips ? static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1 : 1;
 
         createImage();
-        
-        if (mipCount > 1)
-            generateMipmaps();
-        
+        generateMipmaps();
         createImageView();
+        createSampler();
+    }
 
-        if (usageFlags & vk::ImageUsageFlagBits::eSampled)
-            createSampler();
+    Texture Texture::createColorResolve(const SwapChain &swapChain) {
+        return std::move(Texture("DepthBuffer", swapChain.getSurfaceFormat().format, 
+                              vk::ImageTiling::eOptimal, vk::ImageAspectFlagBits::eColor, vk::ImageUsageFlagBits::eTransientAttachment | vk::ImageUsageFlagBits::eColorAttachment,
+                              Core::getInstance().getMaxUsableSampleCount(),
+                              swapChain.getExtent().width, swapChain.getExtent().height, 1, false));
     }
 
     Texture Texture::createDepthBuffer(const SwapChain &swapChain) {
         return std::move(Texture("DepthBuffer", Core::getInstance().findDepthFormat(), 
                               vk::ImageTiling::eOptimal, vk::ImageAspectFlagBits::eDepth, vk::ImageUsageFlagBits::eDepthStencilAttachment,
+                              Core::getInstance().getMaxUsableSampleCount(),
                               swapChain.getExtent().width, swapChain.getExtent().height, 1, false));
     }
 
@@ -110,6 +133,7 @@ namespace Graphics {
             std::swap(width,             rhs.width);
             std::swap(height,            rhs.height);
             std::swap(channels,          rhs.channels);
+            std::swap(msaaSamples,       rhs.msaaSamples);
             std::swap(mipCount,          rhs.mipCount);
             std::swap(currentQueueIndex, rhs.currentQueueIndex);
         }
@@ -158,7 +182,7 @@ namespace Graphics {
             .extent            = {width, height, 1},
             .mipLevels         = mipCount,
             .arrayLayers       = 1,
-            .samples           = vk::SampleCountFlagBits::e1,
+            .samples           = msaaSamples,
             .tiling            = tiling,
             .usage             = usageFlags,
             .sharingMode       = vk::SharingMode::eExclusive // fixing in exclusive mode for now
@@ -182,6 +206,8 @@ namespace Graphics {
     }
 
     void Texture::createSampler() {
+        if (!(usageFlags & vk::ImageUsageFlagBits::eSampled)) return;
+
         vk::PhysicalDeviceProperties properties = Core::getInstance().getPhysicalDevice().getProperties();
 
         vk::SamplerCreateInfo samplerInfo {
@@ -206,6 +232,8 @@ namespace Graphics {
     }
 
     void Texture::generateMipmaps() {
+        if (mipCount <= 1) return;
+
         // Check if image format supports linear blit-ing
         vk::FormatProperties formatProperties = Core::getInstance().getPhysicalDevice().getFormatProperties(format);
 

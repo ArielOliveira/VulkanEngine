@@ -1,7 +1,7 @@
 #include <graphics/renderer.hpp>
 
 #define TINYOBJLOADER_IMPLEMENTATION
-#include <tiny_obj_loader.h>
+#include <application/tiny_obj_loader.h>
 
 #include <unordered_map>
 
@@ -16,10 +16,12 @@ namespace Graphics {
         const Core& core = Core::getInstance();
 
         swapChain    = SwapChain(core.getSurface(), core.getPhysicalDevice(), core.getDevice());
-        pipeline     = Pipeline(core.getDevice(), swapChain.getExtent(), swapChain.getSurfaceFormat(), core.findDepthFormat());
+        pipeline     = Pipeline(core.getDevice(), swapChain.getExtent(), swapChain.getSurfaceFormat(), core.findDepthFormat(), core.getMaxUsableSampleCount());
         renderPass   = CommandBuffer(core.getGraphicsCommandPool(), &core.getGraphicsQueue(), vk::CommandBufferLevel::ePrimary, Models::MAX_FRAMES_IN_FLIGHT);
-        depthBuffer  = Texture::createDepthBuffer(swapChain);
-        modelTexture = Texture(std::string("viking_room.png"), 
+
+        colorResolve  = Texture::createColorResolve(swapChain);
+        depthBuffer   = Texture::createDepthBuffer(swapChain);
+        modelTexture  = Texture(std::string("viking_room.png"), 
                                vk::Format::eR8G8B8A8Srgb, 
                                vk::ImageTiling::eOptimal, 
                                vk::ImageAspectFlagBits::eColor,
@@ -192,6 +194,8 @@ namespace Graphics {
         // Wrost function signature ever
         // TODO: See how this can be improved
         vk::PipelineStageFlags2 depthStageFlags = vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests;
+
+        colorResolve.updateImageLayout(renderPass, vk::ImageLayout::eColorAttachmentOptimal, vk::AccessFlagBits2::eColorAttachmentWrite, vk::PipelineStageFlagBits2::eColorAttachmentOutput, frameIndex, true);
         depthBuffer.updateImageLayout(renderPass, vk::ImageLayout::eDepthAttachmentOptimal, vk::AccessFlagBits2::eDepthStencilAttachmentWrite,  depthStageFlags, frameIndex, true);
 
         Texture::updateImageLayout(renderPass, colorBarrier, frameIndex);
@@ -199,12 +203,23 @@ namespace Graphics {
         vk::ClearValue clearColor = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f);
         vk::ClearValue clearDepth = vk::ClearDepthStencilValue(1.0f, 0.0f);
 
-        vk::RenderingAttachmentInfo colorAttachmentInfo {
+        /*vk::RenderingAttachmentInfo colorAttachmentInfo {
             .imageView      = swapChain.getImageView(imageIndex),
             .imageLayout    = vk::ImageLayout::eColorAttachmentOptimal,
             .loadOp         = vk::AttachmentLoadOp::eClear,
             .storeOp        = vk::AttachmentStoreOp::eStore,
             .clearValue     = clearColor
+        };*/
+        
+        vk::RenderingAttachmentInfo colorAttachmentInfo {
+            .imageView          = colorResolve.getImageView(),
+            .imageLayout        = vk::ImageLayout::eColorAttachmentOptimal,
+            .resolveMode        = vk::ResolveModeFlagBits::eAverage,
+            .resolveImageView   = swapChain.getImageView(imageIndex),
+            .resolveImageLayout = vk::ImageLayout::eColorAttachmentOptimal,
+            .loadOp             = vk::AttachmentLoadOp::eClear,
+            .storeOp            = vk::AttachmentStoreOp::eStore,
+            .clearValue         = clearColor
         };
 
         vk::RenderingAttachmentInfo depthAttachmentInfo {
@@ -259,8 +274,8 @@ namespace Graphics {
             std::cout << "Swap chain is out of date. Recreating..." << '\n';
             
             device.waitIdle(); // Wait until resource is no longer being used before recreating
-            swapChain   = SwapChain(swapChain, surface, physicalDevice, device);
-            depthBuffer = Texture::createDepthBuffer(swapChain);
+            colorResolve = Texture::createColorResolve(swapChain);
+            depthBuffer  = Texture::createDepthBuffer(swapChain);
             
             return;
         }
@@ -310,7 +325,8 @@ namespace Graphics {
 
                 device.waitIdle(); // Wait until resource is no longer being used before recreating
                 swapChain   = SwapChain(swapChain, surface, physicalDevice, device);
-                depthBuffer = Texture::createDepthBuffer(swapChain);
+                colorResolve = Texture::createColorResolve(swapChain);
+                depthBuffer  = Texture::createDepthBuffer(swapChain);
                 break;
             default:
                 std::cout << "Queue returned an unexpected result !\n";

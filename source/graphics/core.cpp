@@ -301,6 +301,21 @@ namespace Graphics {
 
         throw std::runtime_error("failed to find suitable memory type!"); 
     }
+
+    const vk::SampleCountFlagBits Core::getMaxUsableSampleCount() const {
+        vk::PhysicalDeviceProperties deviceProperties = physicalDevice.getProperties();
+
+        vk::SampleCountFlags counts = deviceProperties.limits.framebufferColorSampleCounts & deviceProperties.limits.framebufferDepthSampleCounts;
+        
+        if (counts & vk::SampleCountFlagBits::e64) { return vk::SampleCountFlagBits::e64; }
+        if (counts & vk::SampleCountFlagBits::e32) { return vk::SampleCountFlagBits::e32; }
+        if (counts & vk::SampleCountFlagBits::e16) { return vk::SampleCountFlagBits::e16; }
+        if (counts & vk::SampleCountFlagBits::e8)  { return vk::SampleCountFlagBits::e8; }
+        if (counts & vk::SampleCountFlagBits::e4)  { return vk::SampleCountFlagBits::e4; }
+        if (counts & vk::SampleCountFlagBits::e2)  { return vk::SampleCountFlagBits::e2; }
+
+        return vk::SampleCountFlagBits::e1;
+    }
     
     const vk::raii::SurfaceKHR&     Core::getSurface()             const & { return surface; }
     const vk::raii::Device&         Core::getDevice() const & { return device; }

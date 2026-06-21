@@ -1,4 +1,4 @@
-#include <fileHelper.hpp>
+#include <application/fileHelper.hpp>
 
 vector<char> FileHelper::readFile(const string& fileName, const ios::openmode& flags) {
     ifstream file(fileName, flags);

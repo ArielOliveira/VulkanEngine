@@ -3,7 +3,7 @@
 #include <graphics/renderer.hpp>
 #include <version.hpp>
 #include <application/application.hpp>
-#include <fileHelper.hpp>
+#include <application/fileHelper.hpp>
 
 using Graphics::Core;
 using Graphics::Renderer;

@@ -39,11 +39,12 @@ namespace Graphics {
 
             ~Renderer();
         private:
-            SwapChain     swapChain    = nullptr;
-            Pipeline      pipeline     = nullptr;
-            CommandBuffer renderPass   = nullptr;
-            Texture       depthBuffer  = nullptr;
-            Texture       modelTexture = nullptr;
+            SwapChain     swapChain     = nullptr;
+            Pipeline      pipeline      = nullptr;
+            CommandBuffer renderPass    = nullptr;
+            Texture       colorResolve = nullptr;
+            Texture       depthBuffer   = nullptr;
+            Texture       modelTexture  = nullptr;
 
             vector<vk::raii::Semaphore> presentCompleteSemaphores;
             vector<vk::raii::Semaphore> renderFinishedSemaphores;

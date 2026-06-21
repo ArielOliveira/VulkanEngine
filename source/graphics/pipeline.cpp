@@ -1,7 +1,7 @@
 #include <graphics/pipeline.hpp>
 
 namespace Graphics {
-    Pipeline::Pipeline(const vk::raii::Device &device, const vk::Extent2D &swapChainExtent, const vk::SurfaceFormatKHR &swapChainSurfaceFormat, vk::Format depthFormat) {
+    Pipeline::Pipeline(const vk::raii::Device &device, const vk::Extent2D &swapChainExtent, const vk::SurfaceFormatKHR &swapChainSurfaceFormat, vk::Format depthFormat, vk::SampleCountFlagBits msaaSamples) {
         // Create Shader Module
         string shaderAbsolutePath = FileHelper::getExecutablePath().generic_string();
         shaderAbsolutePath.append(shaderRelativePath);
@@ -85,7 +85,7 @@ namespace Graphics {
         };
 
         vk::PipelineMultisampleStateCreateInfo multisampling {
-            .rasterizationSamples = vk::SampleCountFlagBits::e1,
+            .rasterizationSamples = msaaSamples,
             .sampleShadingEnable  = vk::False
         };
 
