@@ -1,7 +1,7 @@
 #ifndef GRAPHICS_SWAPCHAIN_HPP
 #define GRAPHICS_SWAPCHAIN_HPP
 
-#include <application/application.hpp>
+#include <runtime/application.hpp>
 
 #include <iostream>
 #include <cstdint>

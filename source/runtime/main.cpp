@@ -2,11 +2,13 @@
 #include <graphics/core.hpp>
 #include <graphics/renderer.hpp>
 #include <version.hpp>
-#include <application/application.hpp>
-#include <application/fileHelper.hpp>
+#include <runtime/application.hpp>
+#include <runtime/fileHelper.hpp>
 
 using Graphics::Core;
 using Graphics::Renderer;
+
+using Runtime::Application;
 
 using std::cout;
 using std::endl;

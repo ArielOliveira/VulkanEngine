@@ -2,7 +2,7 @@
 #define GRAPHICS_PIPELINE_HPP
 
 #include <graphics/models.hpp>
-#include <application/fileHelper.hpp>
+#include <runtime/fileHelper.hpp>
 
 using std::move;
 using std::swap;

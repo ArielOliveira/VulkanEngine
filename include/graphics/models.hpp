@@ -29,30 +29,18 @@ namespace Graphics::Models {
         glm::vec2 texCoord;
 
         static vk::VertexInputBindingDescription getBindingDescription() {
+            // ##binding## can be used to describe separate buffers per attribute (vertex, color) or a separate buffer to stream per instance transformation data
             return {
-                .binding   = 0, // can be used to describe separate buffers per attribute (vertex, color) or a separate buffer to stream per instance transformation data
-                .stride    = sizeof(Vertex),
-                .inputRate = vk::VertexInputRate::eVertex
+                vk::VertexInputBindingDescription(0, sizeof(Vertex), vk::VertexInputRate::eVertex)
             };
         }
 
         static array<vk::VertexInputAttributeDescription, 3> getAttributeDescriptions() {
-            return {{
-                {.location = 0, 
-                .binding  = 0, 
-                .format   = vk::Format::eR32G32B32Sfloat,
-                .offset   = offsetof(Vertex, pos)},
-                
-                {.location = 1,
-                .binding  = 0,
-                .format   = vk::Format::eR32G32B32Sfloat, 
-                .offset   = offsetof(Vertex, color)},
-                
-                {.location = 2,
-                .binding  = 0,
-                .format   = vk::Format::eR32G32B32Sfloat, 
-                .offset   = offsetof(Vertex, texCoord)}
-            }};
+            return {
+                vk::VertexInputAttributeDescription(0, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, pos)),
+                vk::VertexInputAttributeDescription(1, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, color)),
+                vk::VertexInputAttributeDescription(2, 0, vk::Format::eR32G32Sfloat, offsetof(Vertex, texCoord))
+            };
         }
 
         bool operator==(const Vertex& other) const {
@@ -71,6 +59,13 @@ namespace Graphics::Models {
         glm::vec2 position;
         glm::vec2 velocity;
         glm::vec4 color;
+
+        static std::array<vk::VertexInputAttributeDescription, 2> getAttributeDescriptions() {
+            return {
+                vk::VertexInputAttributeDescription( 0, 0, vk::Format::eR32G32Sfloat, offsetof(Particle, position) ),
+                vk::VertexInputAttributeDescription( 1, 0, vk::Format::eR32G32B32A32Sfloat, offsetof(Particle, color) ),
+            };
+        }
     };
 
     const std::vector<Vertex> quadVertices = {

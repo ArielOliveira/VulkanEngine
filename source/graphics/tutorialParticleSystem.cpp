@@ -22,6 +22,7 @@ namespace Graphics {
         }
 
         allocateBuffers();
+        createUniformBuffers();
     }
 
     void TutorialParticleSystem::allocateBuffers() {
@@ -56,5 +57,29 @@ namespace Graphics {
             shaderStorageBuffers.emplace_back(std::move(buffer));
             shaderStorageBuffersMemory.emplace_back(std::move(bufferMem));
         }
+    }
+
+    void TutorialParticleSystem::createUniformBuffers() {
+        std::array<uint32_t, 2> queueFamilyIndices = { Core::getInstance().getGraphicsQueueIndex(), Core::getInstance().getTransferQueueIndex() };
+
+        for (size_t i = 0; i < Graphics::Models::MAX_FRAMES_IN_FLIGHT; i++) {
+            vk::DeviceSize bufferSize = sizeof(Graphics::Models::UniformBufferObject);
+            auto [buffer, bufferMem] = Core::getInstance().createBuffer(
+                bufferSize,
+                vk::BufferUsageFlagBits::eUniformBuffer,
+                vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+                Core::getInstance().hasDedicatedTransferQueue() ? vk::SharingMode::eConcurrent : vk::SharingMode::eExclusive,
+                Core::getInstance().getTransferQueueIndex(),
+                Core::getInstance().hasDedicatedTransferQueue() ? queueFamilyIndices.data()    : nullptr
+            );
+
+            uniformBuffers.emplace_back(std::move(buffer));
+            uniformBuffersMemory.emplace_back(std::move(bufferMem));
+            uniformBuffersMapped.emplace_back(uniformBuffersMemory.back().mapMemory(0, bufferSize));
+        }
+    }
+
+    void TutorialParticleSystem::updateUniformBuffer(uint32_t frameIndex) {
+        
     }
 }

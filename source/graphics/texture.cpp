@@ -1,7 +1,7 @@
 #include <graphics/texture.hpp>
 
 #define STB_IMAGE_IMPLEMENTATION
-#include <application/stb_image.h>
+#include <runtime/stb_image.h>
 
 namespace Graphics {
     Texture::Texture(const std::string& name, vk::Format format, vk::ImageTiling tiling, vk::ImageAspectFlags aspectFlags, vk::ImageUsageFlags usageFlags) :

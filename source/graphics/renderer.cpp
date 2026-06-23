@@ -1,7 +1,7 @@
 #include <graphics/renderer.hpp>
 
 #define TINYOBJLOADER_IMPLEMENTATION
-#include <application/tiny_obj_loader.h>
+#include <runtime/tiny_obj_loader.h>
 
 #include <unordered_map>
 
@@ -261,7 +261,7 @@ namespace Graphics {
         auto [result, imageIndex] = swapChain.acquireNextImage(UINT64_MAX, presentCompleteSemaphores[frameIndex], nullptr);
 
         if (result == vk::Result::eErrorOutOfDateKHR) {
-            while(Application::getInstance().getWindowState() == WindowState::WINDOW_NULL) { glfwWaitEvents(); }
+            while(Runtime::Application::getInstance().getWindowState() == WindowState::WINDOW_NULL) { glfwWaitEvents(); }
 
             std::cout << "Swap chain is out of date. Recreating..." << '\n';
             
@@ -311,7 +311,7 @@ namespace Graphics {
             case vk::Result::eSuccess: break;
             case vk::Result::eSuboptimalKHR:
             case vk::Result::eErrorOutOfDateKHR:
-                while(Application::getInstance().getWindowState() == WindowState::WINDOW_NULL) { glfwWaitEvents(); }
+                while(Runtime::Application::getInstance().getWindowState() == WindowState::WINDOW_NULL) { glfwWaitEvents(); }
 
                 std::cout << "vk::Queue::presentKHR returned eSuboptimal or eErrorOutOfDate. Reacreating swap chain... !\n";
 

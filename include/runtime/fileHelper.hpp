@@ -20,7 +20,7 @@ using std::ifstream;
 using std::string;
 using std::ios;
 
-namespace FileHelper {
+namespace Runtime::FileHelper {
     vector<char> readFile(const string &fileName, const ios::openmode& flags);
     const std::filesystem::path getExecutablePath(bool includeFileName = false);
     const std::filesystem::path getExecutableRelativePath(bool includeFileName = false);

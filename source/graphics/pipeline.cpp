@@ -13,11 +13,11 @@ namespace Graphics {
 
     Pipeline Pipeline::createGraphicsPipeline(const vk::raii::Device &device, const vk::Extent2D &swapChainExtent, const vk::SurfaceFormatKHR &swapChainSurfaceFormat, vk::Format depthFormat, vk::SampleCountFlagBits msaaSamples) {
         // Create Shader Module
-        string shaderAbsolutePath = FileHelper::getExecutablePath().generic_string();
+        string shaderAbsolutePath = Runtime::FileHelper::getExecutablePath().generic_string();
         shaderAbsolutePath.append(Models::SHADER_RELATIVE_PATH);
         shaderAbsolutePath.append("helloTriangle.spv");
 
-        auto shaderCode = FileHelper::readFile(shaderAbsolutePath, ios::ate | ios::binary);
+        auto shaderCode = Runtime::FileHelper::readFile(shaderAbsolutePath, ios::ate | ios::binary);
 
         std::cout << "Shader size in bytes: " << shaderCode.size() << '\n';
 
@@ -255,9 +255,9 @@ namespace Graphics {
     void Pipeline::createGraphicsDescriptorSets(const vk::raii::Device &device, const vector<vk::raii::Buffer> &uniformBuffers, const vk::DescriptorImageInfo &imageInfo) {
         vector<vk::DescriptorSetLayout> layouts(Models::MAX_FRAMES_IN_FLIGHT, descriptorSetLayout);
         vk::DescriptorSetAllocateInfo allocInfo {
-            .descriptorPool         = descriptorPool,
-            .descriptorSetCount     = static_cast<uint32_t>(layouts.size()),
-            .pSetLayouts            = layouts.data()
+            .descriptorPool      = descriptorPool,
+            .descriptorSetCount  = static_cast<uint32_t>(layouts.size()),
+            .pSetLayouts         = layouts.data()
         };
 
         descriptorSets = device.allocateDescriptorSets(allocInfo);
@@ -295,6 +295,26 @@ namespace Graphics {
             vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, Models::MAX_FRAMES_IN_FLIGHT * 2)
         };
 
-        
+        vk::DescriptorPoolCreateInfo poolInfo {
+            .flags           = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
+            .maxSets         = Models::MAX_FRAMES_IN_FLIGHT,
+            .poolSizeCount   = static_cast<uint32_t>(poolSize.size()),
+            .pPoolSizes      = poolSize.data()
+        };
+
+        descriptorPool       = vk::raii::DescriptorPool(device, poolInfo);
+    }
+
+    void Pipeline::createComputeDescriptorSets(const vk::raii::Device &device, const vector<vk::raii::Buffer> &shaderStorageBuffers) {
+        vector<vk::DescriptorSetLayout> layouts (Models::MAX_FRAMES_IN_FLIGHT, descriptorSetLayout);
+        vk::DescriptorSetAllocateInfo allocInfo {
+            .descriptorPool     = *descriptorPool,
+            .descriptorSetCount = static_cast<uint32_t>(layouts.size()),
+            .pSetLayouts        = layouts.data()
+        };
+
+        for (size_t i = 0; i < Models::MAX_FRAMES_IN_FLIGHT; i++) {
+            //vk::DescriptorBufferInfo bufferInfo()
+        }
     }
 }

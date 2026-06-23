@@ -24,7 +24,7 @@ namespace Graphics {
     Core::~Core() {}
 
     void Core::createInstance() {
-        Application& app = Application::getInstance();
+        Runtime::Application& app = Runtime::Application::getInstance();
 
         const vk::ApplicationInfo appInfo {
             .pApplicationName   = app.getInstance().name(),
@@ -96,7 +96,7 @@ namespace Graphics {
     void Core::createSurface() {
         VkSurfaceKHR _surface;
 
-        if (glfwCreateWindowSurface(*instance, Application::getInstance().getWindow(), nullptr, &_surface) != 0) 
+        if (glfwCreateWindowSurface(*instance, Runtime::Application::getInstance().getWindow(), nullptr, &_surface) != 0) 
             throw std::runtime_error("failed to create window surface");
 
         surface = vk::raii::SurfaceKHR(instance, _surface);

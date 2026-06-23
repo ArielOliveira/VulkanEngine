@@ -112,7 +112,7 @@ namespace Graphics {
         
         int width, height;
 
-        Application::getInstance().getFramebufferSize(&width, &height);
+        Runtime::Application::getInstance().getFramebufferSize(&width, &height);
 
         return {
             std::clamp<uint32_t>(width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
