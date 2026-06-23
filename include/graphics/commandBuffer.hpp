@@ -25,12 +25,12 @@ namespace Graphics {
             static CommandBuffer singleTimeTransfer();
             static CommandBuffer singleTimeGraphics();
 
-            const CommandBuffer& addBarrier(const vk::DependencyInfo& info, uint32_t index = 0) const;
+            const CommandBuffer& addImageBarrier(const vk::DependencyInfo& info, uint32_t index = 0) const;
             const CommandBuffer& blit(const vk::BlitImageInfo2& info, uint32_t index = 0) const;
             const CommandBuffer& copyBuffer(vk::raii::Buffer &src, vk::raii::Buffer &dst, vk::DeviceSize size, uint32_t index = 0) const;
             const CommandBuffer& copyBufferToImage(const vk::CopyBufferToImageInfo2 &info, uint32_t index = 0) const;
-            void dispatch(uint32_t index = 0, bool waitBeforeDispatch = false) const;
-            void dispatch(const vk::SubmitInfo &info, const vk::raii::Fence &fence, uint32_t index = 0, bool waitBeforeDispatch = false) const;
+            void submit(uint32_t index = 0) const;
+            void submitOnIdle(const vk::SubmitInfo &info, const vk::raii::Fence &fence, uint32_t index = 0) const;
         private:
             const vk::raii::Queue* queue;
 

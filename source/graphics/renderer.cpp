@@ -15,9 +15,9 @@ namespace Graphics {
     Renderer::Renderer() {
         const Core& core = Core::getInstance();
 
-        swapChain    = SwapChain(core.getSurface(), core.getPhysicalDevice(), core.getDevice());
-        pipeline     = Pipeline(core.getDevice(), swapChain.getExtent(), swapChain.getSurfaceFormat(), core.findDepthFormat(), core.getMaxUsableSampleCount());
-        renderPass   = CommandBuffer(core.getGraphicsCommandPool(), &core.getGraphicsQueue(), vk::CommandBufferLevel::ePrimary, Models::MAX_FRAMES_IN_FLIGHT);
+        swapChain        = SwapChain(core.getSurface(), core.getPhysicalDevice(), core.getDevice());
+        graphicsPipeline = Pipeline::createGraphicsPipeline(core.getDevice(), swapChain.getExtent(), swapChain.getSurfaceFormat(), core.findDepthFormat(), core.getMaxUsableSampleCount());
+        renderPass       = CommandBuffer(core.getGraphicsCommandPool(), &core.getGraphicsQueue(), vk::CommandBufferLevel::ePrimary, Models::MAX_FRAMES_IN_FLIGHT);
 
         colorResolve  = Texture::createColorResolve(swapChain);
         depthBuffer   = Texture::createDepthBuffer(swapChain);
@@ -32,8 +32,8 @@ namespace Graphics {
         createIndexBuffer();
         createUniformBuffers();
 
-        pipeline.createDescriptorPool(core.getDevice());
-        pipeline.createDescriptorSets(core.getDevice(), uniformBuffers, { modelTexture.getSampler(), modelTexture.getImageView(), vk::ImageLayout::eShaderReadOnlyOptimal });
+        graphicsPipeline.createGraphicsDescriptorPool(core.getDevice());
+        graphicsPipeline.createGraphicsDescriptorSets(core.getDevice(), uniformBuffers, { modelTexture.getSampler(), modelTexture.getImageView(), vk::ImageLayout::eShaderReadOnlyOptimal });
 
         createSyncObjects();
     }
@@ -113,7 +113,7 @@ namespace Graphics {
         memcpy(data, vertices.data(), bufferSize);
         stagingBufferMemory.unmapMemory();
 
-        CommandBuffer::singleTimeTransfer().copyBuffer(stagingBuffer, vertexBuffer, bufferSize).dispatch();
+        CommandBuffer::singleTimeTransfer().copyBuffer(stagingBuffer, vertexBuffer, bufferSize).submit();
     }
 
     void Renderer::createIndexBuffer() {
@@ -139,7 +139,7 @@ namespace Graphics {
             Core::getInstance().hasDedicatedTransferQueue() ? queueFamilyIndices.data()    : nullptr
         );
 
-        CommandBuffer::singleTimeTransfer().copyBuffer(stagingBuffer, indexBuffer, bufferSize).dispatch();
+        CommandBuffer::singleTimeTransfer().copyBuffer(stagingBuffer, indexBuffer, bufferSize).submit();
     }
 
     void Renderer::createUniformBuffers() {
@@ -191,10 +191,10 @@ namespace Graphics {
             .subresourceRange       = { .aspectMask = vk::ImageAspectFlagBits::eColor, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1 }
         };
 
+        vk::PipelineStageFlags2 depthStageFlags = vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests;
+        
         // Wrost function signature ever
         // TODO: See how this can be improved
-        vk::PipelineStageFlags2 depthStageFlags = vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests;
-
         colorResolve.updateImageLayout(renderPass, vk::ImageLayout::eColorAttachmentOptimal, vk::AccessFlagBits2::eColorAttachmentWrite, vk::PipelineStageFlagBits2::eColorAttachmentOutput, frameIndex, true);
         depthBuffer.updateImageLayout(renderPass, vk::ImageLayout::eDepthAttachmentOptimal, vk::AccessFlagBits2::eDepthStencilAttachmentWrite,  depthStageFlags, frameIndex, true);
 
@@ -203,14 +203,6 @@ namespace Graphics {
         vk::ClearValue clearColor = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f);
         vk::ClearValue clearDepth = vk::ClearDepthStencilValue(1.0f, 0.0f);
 
-        /*vk::RenderingAttachmentInfo colorAttachmentInfo {
-            .imageView      = swapChain.getImageView(imageIndex),
-            .imageLayout    = vk::ImageLayout::eColorAttachmentOptimal,
-            .loadOp         = vk::AttachmentLoadOp::eClear,
-            .storeOp        = vk::AttachmentStoreOp::eStore,
-            .clearValue     = clearColor
-        };*/
-        
         vk::RenderingAttachmentInfo colorAttachmentInfo {
             .imageView          = colorResolve.getImageView(),
             .imageLayout        = vk::ImageLayout::eColorAttachmentOptimal,
@@ -239,12 +231,12 @@ namespace Graphics {
         };
 
         renderPass[frameIndex].beginRendering(renderingInfo);
-        renderPass[frameIndex].bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline.getInstance());
+        renderPass[frameIndex].bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipeline.getInstance());
         renderPass[frameIndex].setViewport(0, vk::Viewport(0.0f, 0.0f, static_cast<float>(swapChain.getExtent().width), static_cast<float>(swapChain.getExtent().height), 0.0f, 1.0f));
         renderPass[frameIndex].setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapChain.getExtent()));
         renderPass[frameIndex].bindVertexBuffers(0, *vertexBuffer, {0});
         renderPass[frameIndex].bindIndexBuffer(*indexBuffer, 0, vk::IndexTypeValue<decltype(indices)::value_type>::value);
-        renderPass[frameIndex].bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipeline.getPipelineLayout(), 0, *pipeline.getDescriptorSet(frameIndex), nullptr);
+        renderPass[frameIndex].bindDescriptorSets(vk::PipelineBindPoint::eGraphics, graphicsPipeline.getPipelineLayout(), 0, *graphicsPipeline.getDescriptorSet(frameIndex), nullptr);
         renderPass[frameIndex].drawIndexed(static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
         renderPass[frameIndex].endRendering();
 
@@ -303,7 +295,7 @@ namespace Graphics {
             .pSignalSemaphores    = &*renderFinishedSemaphores[imageIndex]
         };
         
-        renderPass.dispatch(submitInfo, inFlightFences[frameIndex], frameIndex, true);
+        renderPass.submitOnIdle(submitInfo, inFlightFences[frameIndex], frameIndex);
 
         const vk::PresentInfoKHR presentInfo {
             .waitSemaphoreCount = 1,

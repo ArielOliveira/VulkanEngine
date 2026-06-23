@@ -43,12 +43,12 @@ namespace Graphics {
             updateImageLayout(cb, vk::ImageLayout::eTransferDstOptimal, vk::AccessFlagBits2::eTransferWrite, vk::PipelineStageFlagBits2::eTransfer, core.getTransferQueueIndex(), 0, false);
             copyBufferToImage(cb, stagingBuffer);
             
-            cb.dispatch();
+            cb.submit();
 
             if (core.hasDedicatedTransferQueue()) {
                 CommandBuffer cb0 = CommandBuffer::singleTimeTransfer();
                 updateImageLayout(cb0, vk::ImageLayout::eTransferSrcOptimal, vk::AccessFlagBits2::eTransferRead, vk::PipelineStageFlagBits2::eTransfer, core.getGraphicsQueueIndex(), 0, false);
-                cb0.dispatch();
+                cb0.submit();
             }
 
             if (mipCount > 1)
@@ -274,7 +274,7 @@ namespace Graphics {
             barrier.dstAccessMask   = vk::AccessFlagBits2::eTransferRead;
             barrier.dstStageMask    = vk::PipelineStageFlagBits2::eTransfer;
 
-            commandBuffer.addBarrier(dependencyInfo);
+            commandBuffer.addImageBarrier(dependencyInfo);
 
             vk::ArrayWrapper1D<vk::Offset3D, 2> srcOffsets {{{
                 {0, 0, 0}, {mipWidth, mipHeight, 1}
@@ -307,7 +307,7 @@ namespace Graphics {
             barrier.dstAccessMask   = vk::AccessFlagBits2::eShaderRead;
             barrier.dstStageMask    = vk::PipelineStageFlagBits2::eFragmentShader;
 
-            commandBuffer.addBarrier(dependencyInfo);
+            commandBuffer.addImageBarrier(dependencyInfo);
 
             if (mipWidth  > 1) mipWidth  >>= 1;
             if (mipHeight > 1) mipHeight >>= 1;
@@ -320,8 +320,8 @@ namespace Graphics {
         barrier.dstAccessMask   = vk::AccessFlagBits2::eShaderRead;
         barrier.dstStageMask    = vk::PipelineStageFlagBits2::eFragmentShader;
 
-        commandBuffer.addBarrier(dependencyInfo);
-        commandBuffer.dispatch();
+        commandBuffer.addImageBarrier(dependencyInfo);
+        commandBuffer.submit();
     }
 
 
@@ -352,7 +352,7 @@ namespace Graphics {
             .pImageMemoryBarriers    = &barrier
         };
 
-        commandBuffer.addBarrier(dependencyInfo, commandIndex);
+        commandBuffer.addImageBarrier(dependencyInfo, commandIndex);
     }
 
     void Texture::updateImageLayout(const CommandBuffer &commandBuffer, vk::ImageLayout targetLayout, vk::AccessFlags2 targetAccess, vk::PipelineStageFlags2 targetStage, uint32_t commandIndex, bool ignoreSourceLayout) {

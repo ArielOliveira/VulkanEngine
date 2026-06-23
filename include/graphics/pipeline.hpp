@@ -13,24 +13,29 @@ namespace Graphics {
             Pipeline() = delete;
             ~Pipeline();
 
-            Pipeline(const vk::raii::Device &device, const vk::Extent2D &swapChain, const vk::SurfaceFormatKHR &swapChainSurfaceFormat, vk::Format depthFormat, vk::SampleCountFlagBits msaaSamples = vk::SampleCountFlagBits::e1);
+            Pipeline(const vk::raii::Device &device, const vk::ComputePipelineCreateInfo &createInfo, vk::raii::PipelineLayout& pipelineLayout, vk::raii::DescriptorSetLayout &descriptorSetLayout);
+            Pipeline(const vk::raii::Device &device, const vk::GraphicsPipelineCreateInfo &createInfo, vk::raii::PipelineLayout& pipelineLayout, vk::raii::DescriptorSetLayout &descriptorSetLayout);
 
             Pipeline(const Pipeline&) = delete;
             Pipeline(Pipeline &&other) noexcept = default;
             Pipeline(std::nullptr_t) noexcept;
 
+            static Pipeline createGraphicsPipeline(const vk::raii::Device &device, const vk::Extent2D &swapChain, const vk::SurfaceFormatKHR &swapChainSurfaceFormat, vk::Format depthFormat, vk::SampleCountFlagBits msaaSamples = vk::SampleCountFlagBits::e1);
+            static Pipeline createComputePipeline(const vk::raii::Device &device);
+
             Pipeline& operator=(const Pipeline&) = delete;
             Pipeline& operator=(Pipeline &&other) noexcept = default;
             Pipeline& operator=(std::nullptr_t) noexcept;
 
-            const char* shaderRelativePath = "./spirv/";
-
-            const vk::raii::Pipeline&  getInstance() const &;
+            const vk::raii::Pipeline&            getInstance() const &;
             const vk::raii::PipelineLayout&      getPipelineLayout() const &;
             const vk::raii::DescriptorSetLayout& getDescriptorSetLayout() const &;
             
-            void createDescriptorPool(const vk::raii::Device &device);
-            void createDescriptorSets(const vk::raii::Device &device, const vector<vk::raii::Buffer> &uniformBuffers, const vk::DescriptorImageInfo &imageInfo);
+            void createGraphicsDescriptorPool(const vk::raii::Device &device);
+            void createGraphicsDescriptorSets(const vk::raii::Device &device, const vector<vk::raii::Buffer> &uniformBuffers, const vk::DescriptorImageInfo &imageInfo);
+
+            void createComputeDescriptorPool(const vk::raii::Device &device);
+            void createComputeDescriptorSets(const vk::raii::Device &device, const vector<vk::raii::Buffer> &shaderStorageBuffers);
 
             const vk::raii::DescriptorSet& getDescriptorSet(uint32_t frameIndex) const;
         private:

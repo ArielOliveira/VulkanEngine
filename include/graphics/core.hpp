@@ -36,10 +36,12 @@ namespace Graphics {
             const vk::raii::CommandPool&    getTransferCommandPool() const &;
             const vk::raii::CommandPool&    getGraphicsCommandPool() const &;
             const vk::raii::Queue&          getTransferQueue()       const &;
+            const vk::raii::Queue&          getComputeQueue()        const &;
             const vk::raii::Queue&          getGraphicsQueue()       const &;
 
-            const uint32_t getGraphicsQueueIndex() const;
             const uint32_t getTransferQueueIndex() const;
+            const uint32_t getComputeQueueIndex()  const;
+            const uint32_t getGraphicsQueueIndex() const;
             const bool     hasDedicatedTransferQueue() const;
         private:
             vk::raii::Context context;

@@ -19,8 +19,9 @@ using std::array;
 
 namespace Graphics::Models {
     constexpr int MAX_FRAMES_IN_FLIGHT = 2;
-    const std::string MODEL_PATH       = "models/viking_room.obj";
-    const std::string TEXTURE_PATH     = "textures/";
+    const std::string MODEL_PATH            = "models/viking_room.obj";
+    const std::string TEXTURE_PATH          = "textures/";
+    const std::string SHADER_RELATIVE_PATH  = "./spirv/";
 
     struct Vertex {
         glm::vec3 pos;
@@ -66,9 +67,10 @@ namespace Graphics::Models {
         alignas(16) glm::mat4 proj;
     };
 
-    enum CommandIntentHint {
-        GRAPHICS = 0,
-        TRANSFER = 1
+    struct Particle {
+        glm::vec2 position;
+        glm::vec2 velocity;
+        glm::vec4 color;
     };
 
     const std::vector<Vertex> quadVertices = {

@@ -125,6 +125,7 @@ namespace Graphics {
         
         for (uint32_t qfpIndex = 0; qfpIndex < queueFamilyProperties.size(); qfpIndex++) {
             if ((queueFamilyProperties[qfpIndex].queueFlags & vk::QueueFlagBits::eGraphics) &&
+                (queueFamilyProperties[qfpIndex].queueFlags & vk::QueueFlagBits::eCompute)  &&
                 physicalDevice.getSurfaceSupportKHR(qfpIndex, *surface)) {
                 graphicsQueueIndex = qfpIndex;
 
@@ -323,10 +324,12 @@ namespace Graphics {
     const vk::raii::CommandPool&    Core::getTransferCommandPool() const & { return transferQueueIndex != vk::QueueFamilyIgnored ? transferCommandPool : graphicsCommandPool; }
     const vk::raii::CommandPool&    Core::getGraphicsCommandPool() const & { return graphicsCommandPool; }
     const vk::raii::Queue&          Core::getTransferQueue() const & { return transferQueueIndex != vk::QueueFamilyIgnored ? transferQueue : graphicsQueue; }
+    const vk::raii::Queue&          Core::getComputeQueue()  const & { return graphicsQueue; } // Right now we are guaranteeing that the graphics queue family also supports compute
     const vk::raii::Queue&          Core::getGraphicsQueue() const & { return graphicsQueue; }
     
-    const uint32_t Core::getGraphicsQueueIndex() const { return graphicsQueueIndex;}
     const uint32_t Core::getTransferQueueIndex() const { return transferQueueIndex; }
+    const uint32_t Core::getComputeQueueIndex()  const { return graphicsQueueIndex; }
+    const uint32_t Core::getGraphicsQueueIndex() const { return graphicsQueueIndex; }
     const bool     Core::hasDedicatedTransferQueue() const { return transferQueueIndex != vk::QueueFamilyIgnored; }
 
 #if DEBUG_MODE

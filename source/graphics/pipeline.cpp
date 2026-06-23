@@ -1,10 +1,20 @@
 #include <graphics/pipeline.hpp>
 
 namespace Graphics {
-    Pipeline::Pipeline(const vk::raii::Device &device, const vk::Extent2D &swapChainExtent, const vk::SurfaceFormatKHR &swapChainSurfaceFormat, vk::Format depthFormat, vk::SampleCountFlagBits msaaSamples) {
+    Pipeline::Pipeline(const vk::raii::Device &device, const vk::GraphicsPipelineCreateInfo &createInfo, vk::raii::PipelineLayout& pipelineLayout, vk::raii::DescriptorSetLayout &descriptorSetLayout) :
+        pipeline(vk::raii::Pipeline(device, nullptr, createInfo)),
+        pipelineLayout(std::move(pipelineLayout)),
+        descriptorSetLayout(std::move(descriptorSetLayout)) {}
+
+    Pipeline::Pipeline(const vk::raii::Device &device, const vk::ComputePipelineCreateInfo &createInfo, vk::raii::PipelineLayout& pipelineLayout, vk::raii::DescriptorSetLayout &descriptorSetLayout) : 
+        pipeline(vk::raii::Pipeline(device, nullptr, createInfo)),
+        pipelineLayout(std::move(pipelineLayout)),
+        descriptorSetLayout(std::move(descriptorSetLayout)) {}
+
+    Pipeline Pipeline::createGraphicsPipeline(const vk::raii::Device &device, const vk::Extent2D &swapChainExtent, const vk::SurfaceFormatKHR &swapChainSurfaceFormat, vk::Format depthFormat, vk::SampleCountFlagBits msaaSamples) {
         // Create Shader Module
         string shaderAbsolutePath = FileHelper::getExecutablePath().generic_string();
-        shaderAbsolutePath.append(shaderRelativePath);
+        shaderAbsolutePath.append(Models::SHADER_RELATIVE_PATH);
         shaderAbsolutePath.append("helloTriangle.spv");
 
         auto shaderCode = FileHelper::readFile(shaderAbsolutePath, ios::ate | ios::binary);
@@ -111,14 +121,14 @@ namespace Graphics {
 
         std::array<vk::DescriptorSetLayoutBinding, 2> bindings {{
             { .binding          = 0,
-            .descriptorType   = vk::DescriptorType::eUniformBuffer,
-            .descriptorCount  = 1,
-            .stageFlags       = vk::ShaderStageFlagBits::eVertex },
+              .descriptorType   = vk::DescriptorType::eUniformBuffer,
+              .descriptorCount  = 1,
+              .stageFlags       = vk::ShaderStageFlagBits::eVertex },
             
             { .binding          = 1,
-            .descriptorType   = vk::DescriptorType::eCombinedImageSampler,
-            .descriptorCount  = 1,
-            .stageFlags       = vk::ShaderStageFlagBits::eFragment }
+              .descriptorType   = vk::DescriptorType::eCombinedImageSampler,
+              .descriptorCount  = 1,
+              .stageFlags       = vk::ShaderStageFlagBits::eFragment }
         }};
 
         vk::DescriptorSetLayoutCreateInfo layoutInfo {
@@ -126,7 +136,7 @@ namespace Graphics {
             .pBindings        = bindings.data()
         };
 
-        descriptorSetLayout = vk::raii::DescriptorSetLayout(device, layoutInfo);
+        vk::raii::DescriptorSetLayout descriptorSetLayout = vk::raii::DescriptorSetLayout(device, layoutInfo);
 
         vk::PipelineLayoutCreateInfo pipelineLayoutInfo {
             .setLayoutCount         = 1,
@@ -134,10 +144,10 @@ namespace Graphics {
             .pushConstantRangeCount = 0
         };
 
-        pipelineLayout = vk::raii::PipelineLayout(device, pipelineLayoutInfo);
+        vk::raii::PipelineLayout pipelineLayout = vk::raii::PipelineLayout(device, pipelineLayoutInfo);
 
         vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = {
-            {.stageCount            = 2,
+           {.stageCount            = 2,
             .pStages               = shaderStages,
             .pVertexInputState     = &vertexInputInfo,
             .pInputAssemblyState   = &inputAssembly,
@@ -150,14 +160,49 @@ namespace Graphics {
             .layout                = pipelineLayout,
             .renderPass            = nullptr},
             
-            {.colorAttachmentCount    = 1,
+           {.colorAttachmentCount    = 1,
             .pColorAttachmentFormats = &swapChainSurfaceFormat.format,
             .depthAttachmentFormat   = depthFormat}
-        }; 
+        };
+        
+        return std::move(Pipeline(device, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>(), pipelineLayout, descriptorSetLayout));
+    }
 
-        pipeline = vk::raii::Pipeline(device, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+    Pipeline Pipeline::createComputePipeline(const vk::raii::Device &device) {
+        vk::raii::ShaderModule shaderModule = nullptr;
 
+        std::array layoutBindings{
+		    vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eCompute, nullptr),
+		    vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute, nullptr),
+		    vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute, nullptr)
+        };
 
+		vk::DescriptorSetLayoutCreateInfo layoutInfo{ 
+            .bindingCount = static_cast<uint32_t>(layoutBindings.size()), 
+            .pBindings = layoutBindings.data()
+        };
+
+        vk::PipelineShaderStageCreateInfo computeShaderStageInfo {
+            .stage  = vk::ShaderStageFlagBits::eCompute,
+            .module = shaderModule,
+            .pName  = "compMain"
+        };
+
+		vk::raii::DescriptorSetLayout computeDescriptorSetLayout = vk::raii::DescriptorSetLayout(device, layoutInfo);
+
+        vk::PipelineLayoutCreateInfo pipelineLayoutInfo {
+            .setLayoutCount = 1,
+            .pSetLayouts = &*computeDescriptorSetLayout
+        };
+
+        vk::raii::PipelineLayout computePipelineLayout = vk::raii::PipelineLayout(device, pipelineLayoutInfo);
+
+        vk::ComputePipelineCreateInfo createInfo {
+            .stage  = computeShaderStageInfo,
+            .layout = computePipelineLayout
+        };
+
+        return std::move(Pipeline(device, createInfo, computePipelineLayout, computeDescriptorSetLayout));
     }
 
     Pipeline::Pipeline(std::nullptr_t) noexcept {}
@@ -191,13 +236,11 @@ namespace Graphics {
             return descriptorSets[frameIndex];
     }
 
-    void Pipeline::createDescriptorPool(const vk::raii::Device &device) {
-        std::array<vk::DescriptorPoolSize, 2> poolSize {{
-            { .type            = vk::DescriptorType::eUniformBuffer,
-              .descriptorCount = Models::MAX_FRAMES_IN_FLIGHT },
-            { .type            = vk::DescriptorType::eCombinedImageSampler,
-              .descriptorCount = Models::MAX_FRAMES_IN_FLIGHT}
-        }};
+    void Pipeline::createGraphicsDescriptorPool(const vk::raii::Device &device) {
+        std::array poolSize {
+            vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, Models::MAX_FRAMES_IN_FLIGHT),
+            vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, Models::MAX_FRAMES_IN_FLIGHT)
+        };
 
         vk::DescriptorPoolCreateInfo poolInfo {
             .flags           = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
@@ -209,7 +252,7 @@ namespace Graphics {
         descriptorPool = vk::raii::DescriptorPool(device, poolInfo);
     }
 
-    void Pipeline::createDescriptorSets(const vk::raii::Device &device, const vector<vk::raii::Buffer> &uniformBuffers, const vk::DescriptorImageInfo &imageInfo) {
+    void Pipeline::createGraphicsDescriptorSets(const vk::raii::Device &device, const vector<vk::raii::Buffer> &uniformBuffers, const vk::DescriptorImageInfo &imageInfo) {
         vector<vk::DescriptorSetLayout> layouts(Models::MAX_FRAMES_IN_FLIGHT, descriptorSetLayout);
         vk::DescriptorSetAllocateInfo allocInfo {
             .descriptorPool         = descriptorPool,
@@ -244,5 +287,14 @@ namespace Graphics {
 
             device.updateDescriptorSets(descriptorWrites, {});
         }
+    }
+
+    void Pipeline::createComputeDescriptorPool(const vk::raii::Device &device) {
+        std::array poolSize {
+            vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, Models::MAX_FRAMES_IN_FLIGHT),
+            vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, Models::MAX_FRAMES_IN_FLIGHT * 2)
+        };
+
+        
     }
 }
