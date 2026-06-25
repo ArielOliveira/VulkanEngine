@@ -93,4 +93,6 @@ namespace Runtime {
     vector<const char*> Application::getRequiredExtensions(uint32_t* count) const { auto extensions = glfwGetRequiredInstanceExtensions(count); return vector(extensions, extensions+(*count)); }
     const char*  Application::name() const { return glfwGetWindowTitle(window); }
     const WindowState Application::getWindowState() const { return windowState; }
+    const double Application::getTime() const { return time; }
+    const double Application::getDeltaTime() const { return deltaTime; }
 }

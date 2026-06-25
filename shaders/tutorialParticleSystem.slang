@@ -4,7 +4,7 @@ struct Particle {
     float4 color;
 };
 
-struct UniformBuffer {
+struct GlobalInputs {
     float deltaTime;
 };
 
@@ -12,7 +12,7 @@ struct ParticleSSBO {
     Particle particles;
 };
 
-ConstantBuffer<UniformBuffer> ubo;
+ConstantBuffer<GlobalInputs> ubo;
 StructuredBuffer<ParticleSSBO> particlesIn;
 RWStructuredBuffer<ParticleSSBO> particlesOut;
 
@@ -21,9 +21,7 @@ RWStructuredBuffer<ParticleSSBO> particlesOut;
 void compMain(uint3 threadId: SV_DispatchThreadID) {
     uint index = threadId.x;
 
-    particlesOut[index].particles.position = particlesIn[index].particles.position +
-                                             particlesIn[index].particles.velocity *
-                                             ubo.deltaTime;
+    particlesOut[index].particles.position = particlesIn[index].particles.position + particlesIn[index].particles.velocity * ubo.deltaTime * 1000;
 
     particlesOut[index].particles.velocity = particlesIn[index].particles.velocity;
 

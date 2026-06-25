@@ -15,13 +15,17 @@ namespace Graphics {
 
             Pipeline(const vk::raii::Device &device, const vk::ComputePipelineCreateInfo &createInfo, vk::raii::PipelineLayout& pipelineLayout, vk::raii::DescriptorSetLayout &descriptorSetLayout);
             Pipeline(const vk::raii::Device &device, const vk::GraphicsPipelineCreateInfo &createInfo, vk::raii::PipelineLayout& pipelineLayout, vk::raii::DescriptorSetLayout &descriptorSetLayout);
+            Pipeline(const vk::raii::Device &device, const vk::GraphicsPipelineCreateInfo &createInfo, vk::raii::PipelineLayout& pipelineLayout);
 
             Pipeline(const Pipeline&) = delete;
             Pipeline(Pipeline &&other) noexcept = default;
             Pipeline(std::nullptr_t) noexcept;
 
             static Pipeline createGraphicsPipeline(const vk::raii::Device &device, const vk::Extent2D &swapChain, const vk::SurfaceFormatKHR &swapChainSurfaceFormat, vk::Format depthFormat, vk::SampleCountFlagBits msaaSamples = vk::SampleCountFlagBits::e1);
+            static Pipeline createGraphicsPipelinePointList(const vk::raii::Device &device, const vk::Extent2D &swapChain, const vk::SurfaceFormatKHR &swapChainSurfaceFormat, vk::Format depthFormat, vk::SampleCountFlagBits msaaSamples = vk::SampleCountFlagBits::e1);
             static Pipeline createComputePipeline(const vk::raii::Device &device);
+
+            static vk::raii::ShaderModule createShaderModule(const char* name, const vk::raii::Device &device);
 
             Pipeline& operator=(const Pipeline&) = delete;
             Pipeline& operator=(Pipeline &&other) noexcept = default;
@@ -35,7 +39,7 @@ namespace Graphics {
             void createGraphicsDescriptorSets(const vk::raii::Device &device, const vector<vk::raii::Buffer> &uniformBuffers, const vk::DescriptorImageInfo &imageInfo);
 
             void createComputeDescriptorPool(const vk::raii::Device &device);
-            void createComputeDescriptorSets(const vk::raii::Device &device, const vector<vk::raii::Buffer> &shaderStorageBuffers);
+            void createComputeDescriptorSets(const vk::raii::Device &device, const vector<vk::raii::Buffer> &uniformBuffers, const vector<vk::raii::Buffer> &shaderStorageBuffers, const uint32_t particleCount);
 
             const vk::raii::DescriptorSet& getDescriptorSet(uint32_t frameIndex) const;
         private:

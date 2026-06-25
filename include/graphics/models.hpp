@@ -55,10 +55,18 @@ namespace Graphics::Models {
         alignas(16) glm::mat4 proj;
     };
 
+    struct GlobalInputs {
+        float deltaTime = 1.0f;
+    };
+
     struct Particle {
         glm::vec2 position;
         glm::vec2 velocity;
         glm::vec4 color;
+
+        static vk::VertexInputBindingDescription getBindingDescription() {
+            return { 0, sizeof(Particle), vk::VertexInputRate::eVertex };
+        }
 
         static std::array<vk::VertexInputAttributeDescription, 2> getAttributeDescriptions() {
             return {

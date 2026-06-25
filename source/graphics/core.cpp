@@ -149,18 +149,17 @@ namespace Graphics {
         float graphicsQueuePriority = 0.5f;
         float transferQueuePriority = 0.5f;  
 
-        vk::PhysicalDeviceFeatures deviceFeatures;
-
         vk::StructureChain<
                 vk::PhysicalDeviceFeatures2, 
                 vk::PhysicalDeviceVulkan11Features, 
                 vk::PhysicalDeviceVulkan13Features, 
-                vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT> featureChain = {
+                vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT,
+                vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR> featureChain = {
             { .features = { .samplerAnisotropy = true }},
             { .shaderDrawParameters = true }, 
-            { .synchronization2 = true,
-            .dynamicRendering = true},
-            { .extendedDynamicState = true }
+            { .synchronization2 = true, .dynamicRendering = true},
+            { .extendedDynamicState = true },
+            { .timelineSemaphore = true }
         };
 
         vector<const char*> requiredDeviceExtensions = {
@@ -259,13 +258,15 @@ namespace Graphics {
             physicalDevice.template getFeatures2<vk::PhysicalDeviceFeatures2, 
                                                  vk::PhysicalDeviceVulkan11Features, 
                                                  vk::PhysicalDeviceVulkan13Features, 
-                                                 vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>();
+                                                 vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT,
+                                                 vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR>();
             
         bool supportsRequiredFeatures = 
             features.template get<vk::PhysicalDeviceFeatures2>().features.samplerAnisotropy &&
             features.template get<vk::PhysicalDeviceVulkan11Features>().shaderDrawParameters &&
             features.template get<vk::PhysicalDeviceVulkan13Features>().dynamicRendering &&
-            features.template get<vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>().extendedDynamicState;
+            features.template get<vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>().extendedDynamicState &&
+            features.template get<vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR>().timelineSemaphore;
 
         return supportsVulkan1_3 && supportsGraphicsAndPresentation && supportsAllRequiredExtensions && supportsRequiredFeatures;
     }
@@ -322,6 +323,7 @@ namespace Graphics {
     const vk::raii::Device&         Core::getDevice() const & { return device; }
     const vk::raii::PhysicalDevice& Core::getPhysicalDevice() const & { return physicalDevice; }
     const vk::raii::CommandPool&    Core::getTransferCommandPool() const & { return transferQueueIndex != vk::QueueFamilyIgnored ? transferCommandPool : graphicsCommandPool; }
+    const vk::raii::CommandPool&    Core::getComputeCommandPool()  const & { return graphicsCommandPool; }
     const vk::raii::CommandPool&    Core::getGraphicsCommandPool() const & { return graphicsCommandPool; }
     const vk::raii::Queue&          Core::getTransferQueue() const & { return transferQueueIndex != vk::QueueFamilyIgnored ? transferQueue : graphicsQueue; }
     const vk::raii::Queue&          Core::getComputeQueue()  const & { return graphicsQueue; } // Right now we are guaranteeing that the graphics queue family also supports compute

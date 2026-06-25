@@ -8,6 +8,7 @@
 #include <graphics/swapChain.hpp>
 #include <graphics/commandBuffer.hpp>
 #include <graphics/texture.hpp>
+#include <graphics/tutorialParticleSystem.hpp>
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -47,6 +48,10 @@ namespace Graphics {
             Texture       depthBuffer      = nullptr;
             Texture       modelTexture     = nullptr;
 
+            TutorialParticleSystem particleSystem = nullptr;
+
+            vk::raii::Semaphore renderingSemaphore = nullptr;
+
             vector<vk::raii::Semaphore> presentCompleteSemaphores;
             vector<vk::raii::Semaphore> renderFinishedSemaphores;
             vector<vk::raii::Fence> inFlightFences;
@@ -63,7 +68,8 @@ namespace Graphics {
             vk::raii::DeviceMemory vertexBufferMemory                     = nullptr;
             vk::raii::DeviceMemory indexBufferMemory                      = nullptr;
 
-            uint32_t frameIndex = 0;
+            uint32_t frameIndex    = 0;
+            uint32_t timelineValue = 0;
 
             Renderer();
     };

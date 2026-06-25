@@ -84,4 +84,10 @@ namespace Graphics {
 
         queue->submit(info, *fence);
     }
+
+    void CommandBuffer::submitAsync(const vk::SubmitInfo &info, const vk::raii::Fence &fence, uint32_t index) const {
+        commands[index].end();
+
+        queue->submit(info, *fence);
+    }
 }

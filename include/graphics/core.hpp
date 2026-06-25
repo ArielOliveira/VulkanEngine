@@ -34,6 +34,7 @@ namespace Graphics {
             const vk::raii::Device&         getDevice()              const &;
             const vk::raii::PhysicalDevice& getPhysicalDevice()      const &;
             const vk::raii::CommandPool&    getTransferCommandPool() const &;
+            const vk::raii::CommandPool&    getComputeCommandPool()  const &;
             const vk::raii::CommandPool&    getGraphicsCommandPool() const &;
             const vk::raii::Queue&          getTransferQueue()       const &;
             const vk::raii::Queue&          getComputeQueue()        const &;

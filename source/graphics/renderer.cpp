@@ -16,7 +16,8 @@ namespace Graphics {
         const Core& core = Core::getInstance();
 
         swapChain        = SwapChain(core.getSurface(), core.getPhysicalDevice(), core.getDevice());
-        graphicsPipeline = Pipeline::createGraphicsPipeline(core.getDevice(), swapChain.getExtent(), swapChain.getSurfaceFormat(), core.findDepthFormat(), core.getMaxUsableSampleCount());
+        graphicsPipeline = Pipeline::createGraphicsPipelinePointList(core.getDevice(), swapChain.getExtent(), swapChain.getSurfaceFormat(), core.findDepthFormat());
+        computePipeline  = Pipeline::createComputePipeline(core.getDevice());
         renderPass       = CommandBuffer(core.getGraphicsCommandPool(), &core.getGraphicsQueue(), vk::CommandBufferLevel::ePrimary, Models::MAX_FRAMES_IN_FLIGHT);
 
         colorResolve  = Texture::createColorResolve(swapChain);
@@ -27,13 +28,19 @@ namespace Graphics {
                                vk::ImageAspectFlagBits::eColor,
                                vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled);
 
-        loadModel();
-        createVertexBuffer();
-        createIndexBuffer();
-        createUniformBuffers();
+        particleSystem = TutorialParticleSystem(swapChain.getExtent().width, swapChain.getExtent().height, 4096);
+        computePipeline.createComputeDescriptorPool(core.getDevice());
+        computePipeline.createComputeDescriptorSets(core.getDevice(), particleSystem.getUniformBuffers(), particleSystem.getStorageBuffers(), particleSystem.getParticleCount());
+        
+        vk::SemaphoreTypeCreateInfo semaphoreCreateInfo { .semaphoreType = vk::SemaphoreType::eTimeline, .initialValue = 0};
+        renderingSemaphore = vk::raii::Semaphore(core.getDevice(), { .pNext = &semaphoreCreateInfo });
+        //loadModel();
+        //createVertexBuffer();
+        //createIndexBuffer();
+        //createUniformBuffers();
 
-        graphicsPipeline.createGraphicsDescriptorPool(core.getDevice());
-        graphicsPipeline.createGraphicsDescriptorSets(core.getDevice(), uniformBuffers, { modelTexture.getSampler(), modelTexture.getImageView(), vk::ImageLayout::eShaderReadOnlyOptimal });
+        //graphicsPipeline.createGraphicsDescriptorPool(core.getDevice());
+        //graphicsPipeline.createGraphicsDescriptorSets(core.getDevice(), uniformBuffers, { modelTexture.getSampler(), modelTexture.getImageView(), vk::ImageLayout::eShaderReadOnlyOptimal });
 
         createSyncObjects();
     }
@@ -48,7 +55,8 @@ namespace Graphics {
         
         for (size_t i = 0; i < Graphics::Models::MAX_FRAMES_IN_FLIGHT; i++) {
             presentCompleteSemaphores.emplace_back(Core::getInstance().getDevice(), vk::SemaphoreCreateInfo());
-            inFlightFences.emplace_back(Core::getInstance().getDevice(), vk::FenceCreateInfo{.flags = vk::FenceCreateFlagBits::eSignaled});
+            //inFlightFences.emplace_back(Core::getInstance().getDevice(), vk::FenceCreateInfo{.flags = vk::FenceCreateFlagBits::eSignaled});
+            inFlightFences.emplace_back(Core::getInstance().getDevice(), vk::FenceCreateInfo{});
         }
     }
 
@@ -195,8 +203,8 @@ namespace Graphics {
         
         // Wrost function signature ever
         // TODO: See how this can be improved
-        colorResolve.updateImageLayout(renderPass, vk::ImageLayout::eColorAttachmentOptimal, vk::AccessFlagBits2::eColorAttachmentWrite, vk::PipelineStageFlagBits2::eColorAttachmentOutput, frameIndex, true);
-        depthBuffer.updateImageLayout(renderPass, vk::ImageLayout::eDepthAttachmentOptimal, vk::AccessFlagBits2::eDepthStencilAttachmentWrite,  depthStageFlags, frameIndex, true);
+        //colorResolve.updateImageLayout(renderPass, vk::ImageLayout::eColorAttachmentOptimal, vk::AccessFlagBits2::eColorAttachmentWrite, vk::PipelineStageFlagBits2::eColorAttachmentOutput, frameIndex, true);
+        //depthBuffer.updateImageLayout(renderPass, vk::ImageLayout::eDepthAttachmentOptimal, vk::AccessFlagBits2::eDepthStencilAttachmentWrite,  depthStageFlags, frameIndex, true);
 
         Texture::updateImageLayout(renderPass, colorBarrier, frameIndex);
 
@@ -204,11 +212,11 @@ namespace Graphics {
         vk::ClearValue clearDepth = vk::ClearDepthStencilValue(1.0f, 0.0f);
 
         vk::RenderingAttachmentInfo colorAttachmentInfo {
-            .imageView          = colorResolve.getImageView(),
+            .imageView          = swapChain.getImageView(imageIndex),
             .imageLayout        = vk::ImageLayout::eColorAttachmentOptimal,
-            .resolveMode        = vk::ResolveModeFlagBits::eAverage,
-            .resolveImageView   = swapChain.getImageView(imageIndex),
-            .resolveImageLayout = vk::ImageLayout::eColorAttachmentOptimal,
+            //.resolveMode        = vk::ResolveModeFlagBits::eAverage,
+            //.resolveImageView   = swapChain.getImageView(imageIndex),
+            //.resolveImageLayout = vk::ImageLayout::eColorAttachmentOptimal,
             .loadOp             = vk::AttachmentLoadOp::eClear,
             .storeOp            = vk::AttachmentStoreOp::eStore,
             .clearValue         = clearColor
@@ -226,18 +234,20 @@ namespace Graphics {
             .renderArea           = {.offset = {0, 0}, .extent = swapChain.getExtent()},
             .layerCount           = 1,
             .colorAttachmentCount = 1,
-            .pColorAttachments    = &colorAttachmentInfo,
-            .pDepthAttachment     = &depthAttachmentInfo
+            .pColorAttachments    = &colorAttachmentInfo
+            //.pDepthAttachment     = &depthAttachmentInfo
         };
 
         renderPass[frameIndex].beginRendering(renderingInfo);
         renderPass[frameIndex].bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipeline.getInstance());
         renderPass[frameIndex].setViewport(0, vk::Viewport(0.0f, 0.0f, static_cast<float>(swapChain.getExtent().width), static_cast<float>(swapChain.getExtent().height), 0.0f, 1.0f));
         renderPass[frameIndex].setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapChain.getExtent()));
-        renderPass[frameIndex].bindVertexBuffers(0, *vertexBuffer, {0});
-        renderPass[frameIndex].bindIndexBuffer(*indexBuffer, 0, vk::IndexTypeValue<decltype(indices)::value_type>::value);
-        renderPass[frameIndex].bindDescriptorSets(vk::PipelineBindPoint::eGraphics, graphicsPipeline.getPipelineLayout(), 0, *graphicsPipeline.getDescriptorSet(frameIndex), nullptr);
-        renderPass[frameIndex].drawIndexed(static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+        renderPass[frameIndex].bindVertexBuffers(0, {*particleSystem.getStorageBuffer(frameIndex)}, {0});
+        renderPass[frameIndex].draw(particleSystem.getParticleCount(), 1, 0, 0);
+        //renderPass[frameIndex].bindVertexBuffers(0, *vertexBuffer, {0});
+        //renderPass[frameIndex].bindIndexBuffer(*indexBuffer, 0, vk::IndexTypeValue<decltype(indices)::value_type>::value);
+        //renderPass[frameIndex].bindDescriptorSets(vk::PipelineBindPoint::eGraphics, graphicsPipeline.getPipelineLayout(), 0, *graphicsPipeline.getDescriptorSet(frameIndex), nullptr);
+        //renderPass[frameIndex].drawIndexed(static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
         renderPass[frameIndex].endRendering();
 
         colorBarrier.srcStageMask  = vk::PipelineStageFlagBits2::eColorAttachmentOutput; colorBarrier.dstStageMask  = vk::PipelineStageFlagBits2::eBottomOfPipe;
@@ -253,12 +263,13 @@ namespace Graphics {
         const vk::raii::SurfaceKHR& surface            = Core::getInstance().getSurface();
         const vk::raii::Queue& graphicsQueue           = Core::getInstance().getGraphicsQueue();
 
+        auto [result, imageIndex] = swapChain.acquireNextImage(UINT64_MAX, nullptr, inFlightFences[frameIndex]);
         vk::Result fenceResult = device.waitForFences(*inFlightFences[frameIndex], vk::True, UINT64_MAX);
         
         if (fenceResult != vk::Result::eSuccess) 
             throw std::runtime_error("failed to wait for fence!");
         
-        auto [result, imageIndex] = swapChain.acquireNextImage(UINT64_MAX, presentCompleteSemaphores[frameIndex], nullptr);
+        //auto [result, imageIndex] = swapChain.acquireNextImage(UINT64_MAX, presentCompleteSemaphores[frameIndex], nullptr);
 
         if (result == vk::Result::eErrorOutOfDateKHR) {
             while(Runtime::Application::getInstance().getWindowState() == WindowState::WINDOW_NULL) { glfwWaitEvents(); }
@@ -279,27 +290,53 @@ namespace Graphics {
 
         device.resetFences(*inFlightFences[frameIndex]);
 
+        uint64_t computeWaitValue      = timelineValue;
+        uint64_t computeSignalValue    = ++timelineValue;
+        uint64_t graphicsWaitValue     = computeSignalValue;
+        uint64_t graphicsSignalValue   = ++timelineValue;
+
+        particleSystem.updateUniformBuffer(frameIndex);
+        particleSystem.executeComputePass(computePipeline, renderingSemaphore, computeWaitValue, computeSignalValue, frameIndex);
+
         recordRenderPass(imageIndex);
 
-        vk::PipelineStageFlags waitDestinationStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput);
-        
-        updateUniformBuffer(frameIndex);
+        //vk::PipelineStageFlags waitDestinationStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput);
+        vk::PipelineStageFlags waitDestinationStageMask(vk::PipelineStageFlagBits::eVertexInput);
 
-        const vk::SubmitInfo submitInfo {
+        vk::TimelineSemaphoreSubmitInfo graphicsTimelineInfo {
+            .waitSemaphoreValueCount   = 1,
+            .pWaitSemaphoreValues      = &graphicsWaitValue,
+            .signalSemaphoreValueCount = 1,
+            .pSignalSemaphoreValues    = &graphicsSignalValue
+        };
+
+        const vk::SubmitInfo graphicsSubmitInfo {
+            .pNext                = &graphicsTimelineInfo,
             .waitSemaphoreCount   = 1,
-            .pWaitSemaphores      = &*presentCompleteSemaphores[frameIndex],
+            .pWaitSemaphores      = &*renderingSemaphore,
             .pWaitDstStageMask    = &waitDestinationStageMask,
             .commandBufferCount   = 1,
             .pCommandBuffers      = &*renderPass[frameIndex],
             .signalSemaphoreCount = 1,
-            .pSignalSemaphores    = &*renderFinishedSemaphores[imageIndex]
+            .pSignalSemaphores    = &*renderingSemaphore
         };
         
-        renderPass.submitOnIdle(submitInfo, inFlightFences[frameIndex], frameIndex);
+        renderPass.submitOnIdle(graphicsSubmitInfo, nullptr, frameIndex);
+
+        vk::SemaphoreWaitInfo waitInfo {
+            .semaphoreCount = 1,
+            .pSemaphores    = &*renderingSemaphore,
+            .pValues        = &graphicsSignalValue
+        };
+
+        // Wait for graphics to complete before presenting
+		auto semaphoreResult = device.waitSemaphores(waitInfo, UINT64_MAX);
+		if (semaphoreResult != vk::Result::eSuccess)
+			throw std::runtime_error("failed to wait for semaphore!");
 
         const vk::PresentInfoKHR presentInfo {
-            .waitSemaphoreCount = 1,
-            .pWaitSemaphores    = &*renderFinishedSemaphores[imageIndex],
+            .waitSemaphoreCount = 0,
+            .pWaitSemaphores    = nullptr,
             .swapchainCount     = 1,
             .pSwapchains        = &*swapChain.getInstance(),
             .pImageIndices      = &imageIndex
@@ -316,7 +353,7 @@ namespace Graphics {
                 std::cout << "vk::Queue::presentKHR returned eSuboptimal or eErrorOutOfDate. Reacreating swap chain... !\n";
 
                 device.waitIdle(); // Wait until resource is no longer being used before recreating
-                swapChain   = SwapChain(swapChain, surface, physicalDevice, device);
+                swapChain    = SwapChain(swapChain, surface, physicalDevice, device);
                 colorResolve = Texture::createColorResolve(swapChain);
                 depthBuffer  = Texture::createDepthBuffer(swapChain);
                 break;

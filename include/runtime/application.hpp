@@ -47,8 +47,8 @@ namespace Runtime {
             const bool isWindowDirty() const;
             const WindowState getWindowState() const;
 
-            double getTime() const;
-            double getDeltaTime() const;
+            const double getTime() const;
+            const double getDeltaTime() const;
         private:
             Application();        
 
