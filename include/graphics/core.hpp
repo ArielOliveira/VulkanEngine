@@ -1,13 +1,16 @@
 #ifndef CORE_HPP
 #define CORE_HPP
 
-#include <vulkan/vulkan_raii.hpp>
-
 #include <runtime/application.hpp>
 
+#include <vulkan/vulkan_raii.hpp>
+#include <vulkan/vulkan_profiles.hpp>
+
 #include <iostream>
+#include <vector>
 
 using std::cout;
+using std::vector;
 
 namespace Graphics {
     class Core {
@@ -59,7 +62,12 @@ namespace Graphics {
             uint32_t graphicsQueueIndex               = vk::QueueFamilyIgnored;
             uint32_t transferQueueIndex               = vk::QueueFamilyIgnored;
 
-            const std::vector<char const*> validationLayers = { "VK_LAYER_KHRONOS_validation" };
+            vector<const char*> requiredDeviceExtensions;
+
+            const VpProfileProperties profile = {
+                VP_KHR_ROADMAP_2022_NAME,
+                VP_KHR_ROADMAP_2022_SPEC_VERSION
+            };
 
             Core();
 
@@ -69,7 +77,9 @@ namespace Graphics {
             void createSurface();
             void createCommandPool();
 
-            const bool isDeviceSuitable(const vk::raii::PhysicalDevice &physicalDevice) const;
+            const bool isDeviceSuitable(const vk::raii::PhysicalDevice &physicalDevice);
+            const bool isDedicatedTransferQueue(const vk::QueueFlags &queueFlags) const;
+            const bool isGraphicsAndComputeQueue(const vk::QueueFlags &queueFlags) const;
 
         #if DEBUG_MODE
             void setupDebugMessenger();

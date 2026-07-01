@@ -78,27 +78,8 @@ namespace Graphics {
         createSampler();
     }
 
-    Texture::Texture(const std::string& name, vk::Format format, vk::ImageTiling tiling, vk::ImageAspectFlags aspectFlags, vk::ImageUsageFlags usageFlags, uint32_t width, uint32_t height, uint32_t channels, bool generateMips) :
-        name(std::string(name)),
-        format(format),
-        tiling(tiling),
-        aspectFlags(aspectFlags),
-        usageFlags(usageFlags),
-        msaaSamples(vk::SampleCountFlagBits::e1),
-        width(width),
-        height(height),
-        channels(channels) {
-        
-        mipCount = generateMips ? static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1 : 1;
-
-        createImage();
-        generateMipmaps();
-        createImageView();
-        createSampler();
-    }
-
     Texture Texture::createColorResolve(const SwapChain &swapChain) {
-        return std::move(Texture("DepthBuffer", swapChain.getSurfaceFormat().format, 
+        return std::move(Texture("MSAA", swapChain.getSurfaceFormat().format, 
                               vk::ImageTiling::eOptimal, vk::ImageAspectFlagBits::eColor, vk::ImageUsageFlagBits::eTransientAttachment | vk::ImageUsageFlagBits::eColorAttachment,
                               Core::getInstance().getMaxUsableSampleCount(),
                               swapChain.getExtent().width, swapChain.getExtent().height, 1, false));

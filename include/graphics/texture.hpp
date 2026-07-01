@@ -14,7 +14,6 @@ namespace Graphics {
             Texture(const Texture&) = delete;
             Texture(Texture&& rhs) noexcept = default;
             Texture(const std::string& name, vk::Format format, vk::ImageTiling tiling, vk::ImageAspectFlags aspectFlags, vk::ImageUsageFlags usageFlags, vk::SampleCountFlagBits msaaSamples, uint32_t width, uint32_t height, uint32_t channels, bool generateMips);
-            Texture(const std::string& name, vk::Format format, vk::ImageTiling tiling, vk::ImageAspectFlags aspectFlags, vk::ImageUsageFlags usageFlags, uint32_t width, uint32_t height, uint32_t channels, bool generateMips);
             Texture(const std::string& name, vk::Format format, vk::ImageTiling tiling, vk::ImageAspectFlags aspectFlags, vk::ImageUsageFlags usageFlags);
 
             static Texture createColorResolve(const SwapChain &swapChain);

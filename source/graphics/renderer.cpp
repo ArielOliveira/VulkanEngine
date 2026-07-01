@@ -27,11 +27,15 @@ namespace Graphics {
                                vk::ImageTiling::eOptimal, 
                                vk::ImageAspectFlagBits::eColor,
                                vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled);
-
+        
         particleSystem = TutorialParticleSystem(swapChain.getExtent().width, swapChain.getExtent().height, 4096);
+
         computePipeline.createComputeDescriptorPool(core.getDevice());
         computePipeline.createComputeDescriptorSets(core.getDevice(), particleSystem.getUniformBuffers(), particleSystem.getStorageBuffers(), particleSystem.getParticleCount());
-        
+                               
+        for (uint32_t i = 0; i < Models::MAX_FRAMES_IN_FLIGHT; i++)
+            particleSystem.recordComputePass(computePipeline, i);
+
         vk::SemaphoreTypeCreateInfo semaphoreCreateInfo { .semaphoreType = vk::SemaphoreType::eTimeline, .initialValue = 0};
         renderingSemaphore = vk::raii::Semaphore(core.getDevice(), { .pNext = &semaphoreCreateInfo });
         //loadModel();
@@ -48,16 +52,10 @@ namespace Graphics {
     Renderer::~Renderer() {}
 
     void Renderer::createSyncObjects() {
-        assert(presentCompleteSemaphores.empty() && renderFinishedSemaphores.empty() && inFlightFences.empty());
-
-        for (size_t i = 0; i < swapChain.getImageCount(); i++)
-            renderFinishedSemaphores.emplace_back(Core::getInstance().getDevice(), vk::SemaphoreCreateInfo());
+        assert(inFlightFences.empty());
         
-        for (size_t i = 0; i < Graphics::Models::MAX_FRAMES_IN_FLIGHT; i++) {
-            presentCompleteSemaphores.emplace_back(Core::getInstance().getDevice(), vk::SemaphoreCreateInfo());
-            //inFlightFences.emplace_back(Core::getInstance().getDevice(), vk::FenceCreateInfo{.flags = vk::FenceCreateFlagBits::eSignaled});
+        for (size_t i = 0; i < Graphics::Models::MAX_FRAMES_IN_FLIGHT; i++) 
             inFlightFences.emplace_back(Core::getInstance().getDevice(), vk::FenceCreateInfo{});
-        }
     }
 
     void Renderer::loadModel() {
@@ -296,7 +294,8 @@ namespace Graphics {
         uint64_t graphicsSignalValue   = ++timelineValue;
 
         particleSystem.updateUniformBuffer(frameIndex);
-        particleSystem.executeComputePass(computePipeline, renderingSemaphore, computeWaitValue, computeSignalValue, frameIndex);
+        //particleSystem.recordComputePass(computePipeline, frameIndex);
+        particleSystem.executeComputePass(renderingSemaphore, computeWaitValue, computeSignalValue, frameIndex);
 
         recordRenderPass(imageIndex);
 
@@ -329,7 +328,7 @@ namespace Graphics {
             .pValues        = &graphicsSignalValue
         };
 
-        // Wait for graphics to complete before presenting
+        // Wait on CPU for graphics to complete before presenting
 		auto semaphoreResult = device.waitSemaphores(waitInfo, UINT64_MAX);
 		if (semaphoreResult != vk::Result::eSuccess)
 			throw std::runtime_error("failed to wait for semaphore!");
@@ -362,6 +361,6 @@ namespace Graphics {
                 break;        // an unexpected result is returned!
 	    }
 
-        frameIndex = (frameIndex + 1) % Graphics::Models::MAX_FRAMES_IN_FLIGHT;
+        frameIndex = (frameIndex + 1) % Models::MAX_FRAMES_IN_FLIGHT;
     }
 }

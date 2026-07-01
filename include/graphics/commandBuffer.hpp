@@ -32,6 +32,7 @@ namespace Graphics {
             void submit(uint32_t index = 0) const;
             void submitOnIdle(const vk::SubmitInfo &info, const vk::raii::Fence &fence, uint32_t index = 0) const;
             void submitAsync(const vk::SubmitInfo &info, const vk::raii::Fence &fence, uint32_t index = 0) const;
+            void submitOnlyAsync(const vk::SubmitInfo &info, const vk::raii::Fence &fence, uint32_t index = 0) const;
         private:
             const vk::raii::Queue* queue;
 

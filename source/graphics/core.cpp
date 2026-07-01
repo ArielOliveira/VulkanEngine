@@ -24,6 +24,13 @@ namespace Graphics {
     Core::~Core() {}
 
     void Core::createInstance() {
+        VkBool32 profileSupported;
+
+        vpGetInstanceProfileSupport(nullptr, &profile, &profileSupported);
+
+        if (!profileSupported)
+            throw std::runtime_error(std::string(VP_KHR_ROADMAP_2022_NAME) + " is not supported!");
+
         Runtime::Application& app = Runtime::Application::getInstance();
 
         const vk::ApplicationInfo appInfo {
@@ -38,28 +45,14 @@ namespace Graphics {
         vector<const char*> requiredExtensions = app.getRequiredExtensions(&extensionCount);
         
         try {
-            std::vector<char const*> requiredLayers;
             auto layerProperties = context.enumerateInstanceLayerProperties();
             std::vector<vk::ExtensionProperties> extensionProperties = context.enumerateInstanceExtensionProperties();
             
             // ENABLE DEBUG FEATURES
         #if DEBUG_MODE
-            requiredLayers.assign(validationLayers.begin(), validationLayers.end());
             requiredExtensions.push_back(vk::EXTDebugUtilsExtensionName);
                 
-            // CHECK FOR VALIDATION LAYERS
-            if (std::ranges::any_of(
-                requiredLayers,
-                [&layerProperties](auto const &requiredLayer) {
-                    return std::ranges::none_of(layerProperties,
-                    [requiredLayer](auto const &layerProperty) {
-                        return strcmp(layerProperty.layerName, requiredLayer) == 0;
-                    });
-                })) {
-                    throw std::runtime_error("One or more required layers are not supported!");
-                }
-
-            cout << "Available device extensions" << '\n';
+            cout << "Available device extensions: " << '\n';
 
             for (const auto& extension : extensionProperties)
                 cout << '\t' << extension.extensionName << '\n';
@@ -78,13 +71,22 @@ namespace Graphics {
 
         vk::InstanceCreateInfo createInfo {
             .pApplicationInfo        = &appInfo,
-            .enabledLayerCount       = static_cast<uint32_t>(requiredLayers.size()),
-            .ppEnabledLayerNames     = requiredLayers.data(),
             .enabledExtensionCount   = static_cast<uint32_t>(requiredExtensions.size()),
             .ppEnabledExtensionNames = requiredExtensions.data()
         };
 
-        instance = vk::raii::Instance(context, createInfo);
+        VpInstanceCreateInfo profileCreateInfo {
+            .pCreateInfo             = createInfo,
+            .enabledFullProfileCount = 1,
+            .pEnabledFullProfiles    = &profile
+        };
+
+        VkInstance rawInstance = nullptr;
+
+        if (vpCreateInstance(&profileCreateInfo, nullptr, &rawInstance) != VkResult::VK_SUCCESS)
+            throw std::runtime_error("Failed to create instance with profile: " + std::string(VP_KHR_ROADMAP_2022_NAME));
+
+        instance = vk::raii::Instance(context, rawInstance);
 
         } catch (const vk::SystemError& err) {
             cerr << "Vulkan Error: " << err.what() << '\n';
@@ -124,15 +126,12 @@ namespace Graphics {
         bool foundDedicatedTransfer       = false;
         
         for (uint32_t qfpIndex = 0; qfpIndex < queueFamilyProperties.size(); qfpIndex++) {
-            if ((queueFamilyProperties[qfpIndex].queueFlags & vk::QueueFlagBits::eGraphics) &&
-                (queueFamilyProperties[qfpIndex].queueFlags & vk::QueueFlagBits::eCompute)  &&
+            if (isGraphicsAndComputeQueue(queueFamilyProperties[qfpIndex].queueFlags) &&
                 physicalDevice.getSurfaceSupportKHR(qfpIndex, *surface)) {
                 graphicsQueueIndex = qfpIndex;
 
                 foundGraphicsAndPresentation = true;
-            } else if ((queueFamilyProperties[qfpIndex].queueFlags & vk::QueueFlagBits::eTransfer) &&
-                    !(queueFamilyProperties[qfpIndex].queueFlags & vk::QueueFlagBits::eGraphics) &&
-                    !(queueFamilyProperties[qfpIndex].queueFlags & vk::QueueFlagBits::eCompute)) {
+            } else if (isDedicatedTransferQueue(queueFamilyProperties[qfpIndex].queueFlags)) {
                 transferQueueIndex = qfpIndex;
 
                 cout << "Found dedicated transfer queue." << '\n';
@@ -149,51 +148,35 @@ namespace Graphics {
         float graphicsQueuePriority = 0.5f;
         float transferQueuePriority = 0.5f;  
 
-        vk::StructureChain<
-                vk::PhysicalDeviceFeatures2, 
-                vk::PhysicalDeviceVulkan11Features, 
-                vk::PhysicalDeviceVulkan13Features, 
-                vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT,
-                vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR> featureChain = {
-            { .features = { .samplerAnisotropy = true }},
-            { .shaderDrawParameters = true }, 
-            { .synchronization2 = true, .dynamicRendering = true},
-            { .extendedDynamicState = true },
-            { .timelineSemaphore = true }
-        };
+        std::vector<vk::DeviceQueueCreateInfo> queueCreateInfos;
 
-        vector<const char*> requiredDeviceExtensions = {
-            vk::KHRSwapchainExtensionName
-        };
+        queueCreateInfos.push_back({ .queueFamilyIndex = graphicsQueueIndex, .queueCount = 1, .pQueuePriorities = &graphicsQueuePriority });
 
-        uint32_t queueCount = foundDedicatedTransfer ? 2 : 1;
-        std::array<vk::DeviceQueueCreateInfo, 2> queueCreateInfos;
+        if (foundDedicatedTransfer) 
+            queueCreateInfos.push_back({ .queueFamilyIndex = transferQueueIndex, .queueCount = 1, .pQueuePriorities = &transferQueuePriority });
 
-        vk::DeviceQueueCreateInfo deviceGraphicsQueueCreateInfo { 
-            .queueFamilyIndex = graphicsQueueIndex,
-            .queueCount       = 1,
-            .pQueuePriorities = &graphicsQueuePriority
-        };
-
-        if (foundDedicatedTransfer) {
-            vk::DeviceQueueCreateInfo deviceTransferQueueCreateInfo {
-                .queueFamilyIndex = transferQueueIndex,
-                .queueCount       = 1,
-                .pQueuePriorities = &transferQueuePriority
-            };
-
-            queueCreateInfos = { deviceGraphicsQueueCreateInfo, deviceTransferQueueCreateInfo };
-        }
+        requiredDeviceExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 
         vk::DeviceCreateInfo deviceCreateInfo {
-            .pNext                   = &featureChain.get<vk::PhysicalDeviceFeatures2>(),
-            .queueCreateInfoCount    = queueCount,
-            .pQueueCreateInfos       = foundDedicatedTransfer ? queueCreateInfos.data() : &deviceGraphicsQueueCreateInfo,
+            .queueCreateInfoCount    = static_cast<uint32_t>(queueCreateInfos.size()),
+            .pQueueCreateInfos       = queueCreateInfos.data(),
             .enabledExtensionCount   = static_cast<uint32_t>(requiredDeviceExtensions.size()),
             .ppEnabledExtensionNames = requiredDeviceExtensions.data()
         };
 
-        device            = vk::raii::Device(physicalDevice, deviceCreateInfo);
+        VpDeviceCreateInfo createInfo {
+            .pCreateInfo             = deviceCreateInfo,
+            .enabledFullProfileCount = 1,
+            .pEnabledFullProfiles    = &profile
+        };
+
+        VkDevice rawDevice = VK_NULL_HANDLE;
+
+        if (vpCreateDevice(*physicalDevice, &createInfo, nullptr, &rawDevice) != VkResult::VK_SUCCESS) {
+            throw std::runtime_error("Failed to create logical device with profile: " + std::string(VP_KHR_ROADMAP_2022_NAME));
+        }
+
+        device            = vk::raii::Device(physicalDevice, rawDevice);
         graphicsQueue     = vk::raii::Queue(device, graphicsQueueIndex, 0);
         if (foundDedicatedTransfer)
             transferQueue = vk::raii::Queue(device, transferQueueIndex, 0);
@@ -208,11 +191,8 @@ namespace Graphics {
         graphicsCommandPool = vk::raii::CommandPool(device, graphicsPoolInfo);
         
         if (hasDedicatedTransferQueue()) {
-            // Review flags usage. Tutorial suggests using only eTransient, while AI chatbot (shame on me)
-            // mentions short-lived command buffers (i.e transfers) will get reset often (?) so eResetCommandBuffer 
-            // is also appropriate.
             vk::CommandPoolCreateInfo transferPoolInfo {
-                .flags              = vk::CommandPoolCreateFlagBits::eTransient | vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
+                .flags              = vk::CommandPoolCreateFlagBits::eTransient,
                 .queueFamilyIndex   = transferQueueIndex
             };
 
@@ -220,9 +200,10 @@ namespace Graphics {
         }
     }
 
-    const bool Core::isDeviceSuitable(vk::raii::PhysicalDevice const& physicalDevice) const {
+    const bool Core::isDeviceSuitable(vk::raii::PhysicalDevice const& physicalDevice) {
         auto queueFamilies = physicalDevice.getQueueFamilyProperties();
 
+        uint32_t apiVersion = physicalDevice.getProperties().apiVersion;
         bool supportsVulkan1_3 = physicalDevice.getProperties().apiVersion >= vk::ApiVersion13;
         bool supportsGraphicsAndPresentation = false;
 
@@ -240,35 +221,13 @@ namespace Graphics {
         if (queueIndex == ~0) 
             throw std::runtime_error("Could not find a queue for graphics and presentation -> terminating");
 
-        vector<const char*> requiredDeviceExtensions = {vk::KHRSwapchainExtensionName};
+        VkBool32 supported = false;
+        vpGetPhysicalDeviceProfileSupport(*instance, *physicalDevice, &profile, &supported);
 
-        auto availableDeviceExtensions = physicalDevice.enumerateDeviceExtensionProperties();
+        if (!supported)
+            throw std::runtime_error(std::string(VP_KHR_ROADMAP_2022_NAME) + " is not supported on this device!");
 
-        bool supportsAllRequiredExtensions = 
-            std::ranges::all_of(
-                requiredDeviceExtensions, 
-                [&availableDeviceExtensions](auto const& requiredDeviceExtension) {
-                    return std::ranges::any_of(
-                        availableDeviceExtensions,
-                        [requiredDeviceExtension](auto const& availableDeviceExtension)
-                        { return strcmp(availableDeviceExtension.extensionName, requiredDeviceExtension) == 0; });                    
-            });
-            
-        auto features                 = 
-            physicalDevice.template getFeatures2<vk::PhysicalDeviceFeatures2, 
-                                                 vk::PhysicalDeviceVulkan11Features, 
-                                                 vk::PhysicalDeviceVulkan13Features, 
-                                                 vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT,
-                                                 vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR>();
-            
-        bool supportsRequiredFeatures = 
-            features.template get<vk::PhysicalDeviceFeatures2>().features.samplerAnisotropy &&
-            features.template get<vk::PhysicalDeviceVulkan11Features>().shaderDrawParameters &&
-            features.template get<vk::PhysicalDeviceVulkan13Features>().dynamicRendering &&
-            features.template get<vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>().extendedDynamicState &&
-            features.template get<vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR>().timelineSemaphore;
-
-        return supportsVulkan1_3 && supportsGraphicsAndPresentation && supportsAllRequiredExtensions && supportsRequiredFeatures;
+        return supported;
     }
 
     const vk::Format Core::findDepthFormat() const {
@@ -333,6 +292,17 @@ namespace Graphics {
     const uint32_t Core::getComputeQueueIndex()  const { return graphicsQueueIndex; }
     const uint32_t Core::getGraphicsQueueIndex() const { return graphicsQueueIndex; }
     const bool     Core::hasDedicatedTransferQueue() const { return transferQueueIndex != vk::QueueFamilyIgnored; }
+
+    const bool Core::isDedicatedTransferQueue(const vk::QueueFlags &queueFlags) const {
+        return (queueFlags & vk::QueueFlagBits::eTransfer)  &&
+              !(queueFlags & vk::QueueFlagBits::eCompute)   &&
+              !(queueFlags & vk::QueueFlagBits::eGraphics);
+    }
+
+    const bool Core::isGraphicsAndComputeQueue(const vk::QueueFlags &queueFlags) const {
+        return (queueFlags & vk::QueueFlagBits::eCompute)   &&
+               (queueFlags & vk::QueueFlagBits::eGraphics);
+    }
 
 #if DEBUG_MODE
     void Core::setupDebugMessenger() {

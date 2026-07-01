@@ -51,9 +51,6 @@ namespace Graphics {
             TutorialParticleSystem particleSystem = nullptr;
 
             vk::raii::Semaphore renderingSemaphore = nullptr;
-
-            vector<vk::raii::Semaphore> presentCompleteSemaphores;
-            vector<vk::raii::Semaphore> renderFinishedSemaphores;
             vector<vk::raii::Fence> inFlightFences;
 
             vector<Graphics::Models::Vertex> vertices;

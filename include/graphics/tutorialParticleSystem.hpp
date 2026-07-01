@@ -30,7 +30,8 @@ namespace Graphics {
 
             void allocateBuffers();
             void updateUniformBuffer(uint32_t frameIndex);
-            void executeComputePass(const Pipeline &pipeline, const Semaphore &semaphore, const uint64_t &waitValue, const uint64_t &signalValue, uint32_t frameIndex);
+            void recordComputePass(const Pipeline &pipeline, uint32_t frameIndex);
+            void executeComputePass(const Semaphore &semaphore, const uint64_t &waitValue, const uint64_t &signalValue, uint32_t frameIndex);
 
             const vector<vk::raii::Buffer>& getStorageBuffers() const;
             const vector<vk::raii::Buffer>& getUniformBuffers() const;

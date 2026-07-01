@@ -95,12 +95,17 @@ namespace Graphics {
         memcpy(uniformBuffersMapped[frameIndex], &globalInputs, sizeof(Models::GlobalInputs));
     }
 
-    void TutorialParticleSystem::executeComputePass(const Pipeline &pipeline, const Semaphore &semaphore, const uint64_t &waitValue, const uint64_t &signalValue, uint32_t frameIndex) {
-        commandBuffer[frameIndex].reset();
+    void TutorialParticleSystem::recordComputePass(const Pipeline &pipeline, uint32_t frameIndex) {
         commandBuffer[frameIndex].begin({});
         commandBuffer[frameIndex].bindPipeline(vk::PipelineBindPoint::eCompute, pipeline.getInstance());
         commandBuffer[frameIndex].bindDescriptorSets(vk::PipelineBindPoint::eCompute, pipeline.getPipelineLayout(), 0, {pipeline.getDescriptorSet(frameIndex)}, {});
         commandBuffer[frameIndex].dispatch(count / 256, 1, 1);
+
+        commandBuffer[frameIndex].end();
+    }
+
+    void TutorialParticleSystem::executeComputePass(const Semaphore &semaphore, const uint64_t &waitValue, const uint64_t &signalValue, uint32_t frameIndex) {
+        vk::PipelineStageFlags waitStages[] = { vk::PipelineStageFlagBits::eComputeShader };
 
         vk::TimelineSemaphoreSubmitInfo computeTimelineInfo {
             .waitSemaphoreValueCount   = 1,
@@ -108,8 +113,6 @@ namespace Graphics {
             .signalSemaphoreValueCount = 1,
             .pSignalSemaphoreValues    = &signalValue
         };
-
-        vk::PipelineStageFlags waitStages[] = { vk::PipelineStageFlagBits::eComputeShader };
 
         vk::SubmitInfo computeSubmitInfo {
             .pNext                = &computeTimelineInfo,
@@ -122,7 +125,7 @@ namespace Graphics {
             .pSignalSemaphores    = &*semaphore
         };
 
-        commandBuffer.submitAsync(computeSubmitInfo, nullptr, frameIndex);
+        commandBuffer.submitOnlyAsync(computeSubmitInfo, nullptr, frameIndex);
     }
 
     const vector<vk::raii::Buffer>& TutorialParticleSystem::getStorageBuffers() const { return shaderStorageBuffers; }
