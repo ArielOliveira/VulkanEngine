@@ -6,7 +6,7 @@
 #include <iostream>
 #include <vector>
 #include <stdexcept>
-#include <runtime/applicationModels.hpp>
+#include <runtime/models.hpp>
 #include <version.hpp>
 #include <config.hpp>
 

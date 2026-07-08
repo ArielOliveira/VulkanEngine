@@ -33,6 +33,7 @@ namespace Graphics {
             const vk::Format findSupportedFormat(const vector<vk::Format>& candidates, vk::ImageTiling tiling, vk::FormatFeatureFlags features) const;
             const uint32_t   findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFlags properties) const;
 
+            const vk::raii::Instance&       getVulkanInstance()      const &;
             const vk::raii::SurfaceKHR&     getSurface()             const &;
             const vk::raii::Device&         getDevice()              const &;
             const vk::raii::PhysicalDevice& getPhysicalDevice()      const &;

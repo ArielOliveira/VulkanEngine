@@ -278,6 +278,7 @@ namespace Graphics {
         return vk::SampleCountFlagBits::e1;
     }
     
+    const vk::raii::Instance&       Core::getVulkanInstance()      const & { return instance; }
     const vk::raii::SurfaceKHR&     Core::getSurface()             const & { return surface; }
     const vk::raii::Device&         Core::getDevice() const & { return device; }
     const vk::raii::PhysicalDevice& Core::getPhysicalDevice() const & { return physicalDevice; }

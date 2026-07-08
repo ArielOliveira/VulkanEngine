@@ -1,5 +1,5 @@
-#ifndef APPLICATION_MODELS
-#define APPLICATION_MODELS
+#ifndef RUNTIME_MODELS
+#define RUNTIME_MODELS
 
 namespace Runtime::Models {
     enum WindowState {

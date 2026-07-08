@@ -31,13 +31,15 @@ include(LibraryNames)
 include(ShaderCompiler)
 
 find_package(glm CONFIG REQUIRED)
+find_package(VulkanMemoryAllocator CONFIG REQUIRED)
 
 add_subdirectory(${LIB_DIR}/glfw)
 add_subdirectory(${LIB_DIR}/vulkan)
 
-add_executable(${PROJECT_NAME} ${ALL_SOURCES})
+add_executable(${PROJECT_NAME} ${ALL_SOURCES}
+    include/utils/slotmap.hpp)
 
-target_link_libraries(${PROJECT_NAME} PRIVATE glfw Vulkan::cppm glm::glm)
+target_link_libraries(${PROJECT_NAME} PRIVATE glfw Vulkan::cppm GPUOpen::VulkanMemoryAllocator glm::glm)
 target_include_directories(${PROJECT_NAME} PRIVATE ${INCLUDE_DIR} ${PROJECT_BINARY_DIR})
 target_compile_definitions(${PROJECT_NAME} PRIVATE)
 
