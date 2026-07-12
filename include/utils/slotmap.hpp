@@ -7,7 +7,7 @@
 using std::vector;
 
 namespace Utils {
-    struct Key {
+    struct SlotKey {
         uint32_t index;
         uint32_t generations;
     };
@@ -21,12 +21,12 @@ namespace Utils {
     template <typename T>
     class SlotMap {
         public:
-            SlotMap(uint32_t allocationChunkSize = 8);
+            SlotMap(uint32_t allocationChunkSize = 8, bool allowReallocation = true);
             ~SlotMap();    
             
-            const Key insert(const T &value) noexcept;
-            void erase(const Key& key)      ;
-
+            const SlotKey insert(const T &value);
+            void erase(const SlotKey& key);
+            
             const T*     getRawData()  const;
             
             const size_t getSize()     const;
@@ -37,14 +37,16 @@ namespace Utils {
             uint32_t freeTail;
             
             vector<T>        data;
-            vector<Key>      slots;
+            vector<SlotKey>  slots;
             vector<uint32_t> eraseTable;
+
+            bool allowReallocation;
             
             static constexpr uint32_t MIN_ALLOCATION_CHUNK = 2;
 
             const uint32_t pushFreeList() noexcept;
             void popFreeList(const uint32_t keyIndex)  noexcept;
-            void reallocate() noexcept;
+            void reallocate();
         };
 }
 

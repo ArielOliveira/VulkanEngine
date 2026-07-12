@@ -4,8 +4,7 @@
 #include <engine/resourceManager.hpp>
 #include <version.hpp>
 #include <runtime/application.hpp>
-#include <runtime/fileHelper.hpp>
-#include <utils/slotmap.hpp>
+#include <engine/resources.hpp>
 
 using Graphics::Core;
 using Graphics::Renderer;
@@ -15,24 +14,13 @@ using Runtime::Application;
 using Engine::ResourceManager;
 
 using Utils::SlotMap;
-using Utils::Key;
+using Utils::SlotKey;
 
 using std::cout;
 using std::endl;
 
 int main(int argc, char** args) { 
-    SlotMap<std::string> slotMap;
-
-    slotMap.insert("A");
-    slotMap.insert("B");
-    slotMap.insert("C");
-    slotMap.insert("D");
-    Key eKey = slotMap.insert("E");
-    slotMap.insert("F");
-    slotMap.insert("G");
-    slotMap.insert("H");
-
-    slotMap.erase(eKey);
+    Resources::MeshLoader::loadMesh("viking_room.glb");
 
     /*Application& application = Application::getInstance();
     ResourceManager& rm = ResourceManager::getInstance();

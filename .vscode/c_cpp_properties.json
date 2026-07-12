@@ -4,6 +4,7 @@
             "name": "Win32",
             "includePath": [
                 "${workspaceFolder}/include/**",
+                "${FASTGLTF}/include/**",
                 "${VULKAN_SDK}/Include/**",
                 "${GLM_LIB}/include/**"
             ],

@@ -30,6 +30,7 @@ list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/shaders")
 include(LibraryNames)
 include(ShaderCompiler)
 
+find_package(fastgltf CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(VulkanMemoryAllocator CONFIG REQUIRED)
 
@@ -37,9 +38,17 @@ add_subdirectory(${LIB_DIR}/glfw)
 add_subdirectory(${LIB_DIR}/vulkan)
 
 add_executable(${PROJECT_NAME} ${ALL_SOURCES}
-    include/utils/slotmap.hpp)
+    include/utils/slotmap.hpp
+    include/engine/resources.hpp)
 
-target_link_libraries(${PROJECT_NAME} PRIVATE glfw Vulkan::cppm GPUOpen::VulkanMemoryAllocator glm::glm)
+target_link_libraries(${PROJECT_NAME} PRIVATE 
+    glfw 
+    Vulkan::cppm 
+    GPUOpen::VulkanMemoryAllocator 
+    glm::glm
+    fastgltf::fastgltf
+)
+
 target_include_directories(${PROJECT_NAME} PRIVATE ${INCLUDE_DIR} ${PROJECT_BINARY_DIR})
 target_compile_definitions(${PROJECT_NAME} PRIVATE)
 

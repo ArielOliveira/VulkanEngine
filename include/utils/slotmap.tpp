@@ -5,10 +5,11 @@
 
 namespace Utils {
     template <typename T>
-    SlotMap<T>::SlotMap(uint32_t allocationChunkSize) {
+    SlotMap<T>::SlotMap(uint32_t allocationChunkSize, bool allowReallocation) {
         allocationChunkSize = std::max(allocationChunkSize, MIN_ALLOCATION_CHUNK);
 
         this->allocationChunkSize = allocationChunkSize;
+        this->allowReallocation   = allowReallocation;
 
         data.reserve(allocationChunkSize);
         eraseTable.reserve(allocationChunkSize);
@@ -28,9 +29,13 @@ namespace Utils {
     SlotMap<T>::~SlotMap() {}
 
     template <typename T>
-    const Key SlotMap<T>::insert(const T &value) noexcept {
-        if (freeHead == ~0U) 
-            reallocate();
+    const SlotKey SlotMap<T>::insert(const T &value) {
+        if (freeHead == ~0U) {
+            if (allowReallocation)
+                reallocate();
+            else
+                return { ~0U, ~0U };
+        }
         
         uint32_t slotKey = pushFreeList();    
 
@@ -44,7 +49,7 @@ namespace Utils {
     }
 
     template <typename T>
-    void SlotMap<T>::erase(const Key &key) {
+    void SlotMap<T>::erase(const SlotKey &key) {
         if (key.index < 0 || key.index >= slots.size())
             throw std::runtime_error("Index out of bounds!");
 
@@ -66,10 +71,25 @@ namespace Utils {
     }
 
     template <typename T>
-    void SlotMap<T>::reallocate() noexcept {
-        std::cout << "Reallocation not implemented!" << '\n';
+    void SlotMap<T>::reallocate() {
+        uint32_t oldSize = static_cast<uint32_t>(slots.size());
+        uint32_t newSize = oldSize + allocationChunkSize;
 
-        std::terminate();
+        data.reserve(newSize);
+        eraseTable.reserve(newSize);
+        slots.reserve(newSize);
+
+        for (uint32_t i = oldSize; i < newSize-1U; i++) 
+            slots.push_back( { i+1U, 0 } );
+
+        slots.push_back ( { ~0U, 0 } );
+
+        if (freeHead == ~0U) 
+            freeHead = oldSize;   
+        else 
+            slots[freeTail].index = oldSize; 
+        
+        freeTail = newSize-1U;
     }
 
     template <typename T>
