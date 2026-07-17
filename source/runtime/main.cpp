@@ -1,10 +1,11 @@
 #include <iostream>
 #include <graphics/core.hpp>
 #include <graphics/renderer.hpp>
-#include <engine/resourceManager.hpp>
+#include <engine/resourceEngine.hpp>
 #include <version.hpp>
 #include <runtime/application.hpp>
-#include <engine/resources.hpp>
+#include <engine/fileParser.hpp>
+
 
 using Graphics::Core;
 using Graphics::Renderer;
@@ -20,7 +21,10 @@ using std::cout;
 using std::endl;
 
 int main(int argc, char** args) { 
-    Resources::MeshLoader::loadMesh("viking_room.glb");
+    auto [parser, asset] = Engine::FileParser::openFile(std::string(Engine::Paths::MODELS) + std::string("HierarchyTest.glb"));
+    Engine::FileParser::parseModel(parser, asset.get());
+
+    ResourceManager& rm = ResourceManager::getInstance();
 
     /*Application& application = Application::getInstance();
     ResourceManager& rm = ResourceManager::getInstance();

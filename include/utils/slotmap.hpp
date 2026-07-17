@@ -7,10 +7,16 @@
 using std::vector;
 
 namespace Utils {
-    struct SlotKey {
+    struct SlotBase {
         uint32_t index;
         uint32_t generations;
     };
+
+    struct ResourceSlot : SlotBase {
+        uint32_t refCount;
+    };
+
+    typedef SlotBase SlotKey;
 
     // Slot map implementation:
     // This implementation uses a free-list. Over time
@@ -18,7 +24,7 @@ namespace Utils {
     // hurting cache locality. 
     // Possible alternative: https://github.com/sporacid/slot-map/blob/main/include/spore/slot_map.hpp
     //                     : https://jakubtomsu.github.io/posts/bit_pools/
-    template <typename T>
+    template <typename T, typename Slot = SlotBase>
     class SlotMap {
         public:
             SlotMap(uint32_t allocationChunkSize = 8, bool allowReallocation = true);
@@ -31,13 +37,15 @@ namespace Utils {
             
             const size_t getSize()     const;
             const size_t getCapacity() const;
+
+            Slot& getSlot(const SlotKey& key);
         private:
             uint32_t allocationChunkSize;
             uint32_t freeHead;
             uint32_t freeTail;
             
             vector<T>        data;
-            vector<SlotKey>  slots;
+            vector<Slot>     slots;
             vector<uint32_t> eraseTable;
 
             bool allowReallocation;

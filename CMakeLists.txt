@@ -37,9 +37,7 @@ find_package(VulkanMemoryAllocator CONFIG REQUIRED)
 add_subdirectory(${LIB_DIR}/glfw)
 add_subdirectory(${LIB_DIR}/vulkan)
 
-add_executable(${PROJECT_NAME} ${ALL_SOURCES}
-    include/utils/slotmap.hpp
-    include/engine/resources.hpp)
+add_executable(${PROJECT_NAME} ${ALL_SOURCES})
 
 target_link_libraries(${PROJECT_NAME} PRIVATE 
     glfw 

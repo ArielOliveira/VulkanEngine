@@ -39,24 +39,13 @@ namespace Graphics::Models {
             return {
                 vk::VertexInputAttributeDescription(0, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, pos)),
                 vk::VertexInputAttributeDescription(1, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, color)),
-                vk::VertexInputAttributeDescription(2, 0, vk::Format::eR32G32Sfloat, offsetof(Vertex, texCoord))
+                vk::VertexInputAttributeDescription(2, 0, vk::Format::eR32G32Sfloat,    offsetof(Vertex, texCoord))
             };
         }
 
         bool operator==(const Vertex& other) const {
             return pos == other.pos && color == other.color && texCoord == other.texCoord;
         }
-    };
-
-    // UniformBuffer struct with explicit alignment specifier (C++11)
-    struct UniformBufferObject {
-        alignas(16) glm::mat4 model;
-        alignas(16) glm::mat4 view;
-        alignas(16) glm::mat4 proj;
-    };
-
-    struct GlobalInputs {
-        float deltaTime = 1.0f;
     };
 
     struct Particle {
@@ -76,11 +65,32 @@ namespace Graphics::Models {
         }
     };
 
-    const std::vector<Vertex> quadVertices = {
-        {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
-        {{ 0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
-        {{ 0.5f,  0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
-        {{-0.5f,  0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
+    // UniformBuffer struct with explicit alignment specifier (C++11)
+    struct UniformBufferObject {
+        alignas(16) glm::mat4 model;
+        alignas(16) glm::mat4 view;
+        alignas(16) glm::mat4 proj;
+    };
+
+    struct GlobalInputs {
+        float deltaTime = 1.0f;
+    };
+}
+
+namespace std {
+    template<> struct hash<Graphics::Models::Vertex> {
+        size_t operator()(Graphics::Models::Vertex const& vertex) const {
+            return ((hash<glm::vec3>()(vertex.pos) ^ (hash<glm::vec3>()(vertex.color) << 1)) >> 1) ^ (hash<glm::vec2>()(vertex.texCoord) << 1);
+        }
+   };
+}
+
+namespace Graphics::Primitives {
+    const std::vector<Graphics::Models::Vertex> quadVertices = {
+        {{-0.5f, -0.5f, 0.0f},  {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
+        {{ 0.5f, -0.5f, 0.0f},  {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
+        {{ 0.5f,  0.5f, 0.0f},  {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
+        {{-0.5f,  0.5f, 0.0f},  {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
 
         {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
         {{ 0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
@@ -92,16 +102,6 @@ namespace Graphics::Models {
         0, 1, 2, 2, 3, 0,
         4, 5, 6, 6, 7, 4
     };
-}
-
-
-
-namespace std {
-    template<> struct hash<Graphics::Models::Vertex> {
-        size_t operator()(Graphics::Models::Vertex const& vertex) const {
-            return ((hash<glm::vec3>()(vertex.pos) ^ (hash<glm::vec3>()(vertex.color) << 1)) >> 1) ^ (hash<glm::vec2>()(vertex.texCoord) << 1);
-        }
-   };
 }
 
 #endif
