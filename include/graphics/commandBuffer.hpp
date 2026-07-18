@@ -28,6 +28,9 @@ namespace Graphics {
             const CommandBuffer& addImageBarrier(const vk::DependencyInfo& info, uint32_t index = 0) const;
             const CommandBuffer& blit(const vk::BlitImageInfo2& info, uint32_t index = 0) const;
             const CommandBuffer& copyBuffer(vk::raii::Buffer &src, vk::raii::Buffer &dst, vk::DeviceSize size, uint32_t index = 0) const;
+            const CommandBuffer& copyBuffer(vk::raii::Buffer &src, vk::raii::Buffer &dst, vk::BufferCopy info, uint32_t index = 0) const;
+            const CommandBuffer& copyBuffer(VkBuffer &src, VkBuffer &dst, VkDeviceSize size, uint32_t index = 0) const;
+            const CommandBuffer& copyBuffer(VkBuffer &src, VkBuffer &dst, vk::BufferCopy info, uint32_t index = 0) const;
             const CommandBuffer& copyBufferToImage(const vk::CopyBufferToImageInfo2 &info, uint32_t index = 0) const;
             void submit(uint32_t index = 0) const;
             void submitOnIdle(const vk::SubmitInfo &info, const vk::raii::Fence &fence, uint32_t index = 0) const;

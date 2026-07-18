@@ -116,7 +116,20 @@ namespace Utils {
     }
 
     template <typename T, typename Slot>
-    Slot& SlotMap<T, Slot>::getSlot(const SlotKey& key) { return slots[key]; }
+    Slot& SlotMap<T, Slot>::getSlot(const SlotKey& key) { 
+        assert(key.index >= 0 && !(key.index >= slots.size()));
+        assert(key.generations == slots[key.index].generations);
+
+        return slots[key.index]; 
+    }
+
+    template <typename T, typename Slot>
+    const Slot& SlotMap<T, Slot>::getSlot(const SlotKey& key) const {
+        assert(key.index >= 0 && !(key.index >= slots.size()));
+        assert(key.generations == slots[key.index].generations);
+
+        return slots[key.index]; 
+    }
 
     template <typename T, typename Slot>
     const T* SlotMap<T, Slot>::getRawData() const { return data.data(); }
@@ -126,6 +139,14 @@ namespace Utils {
 
     template <typename T, typename Slot>
     const size_t SlotMap<T, Slot>::getCapacity() const { return data.capacity(); }
+
+    template <typename T, typename Slot>
+    const T& SlotMap<T, Slot>::operator[](const SlotKey& key) const {
+        assert(key.index >= 0 && !(key.index >= slots.size()));
+        assert(key.generations == slots[key.index].generations);
+
+        return data[slots[key.index].index];
+    }
 }
 
 #endif

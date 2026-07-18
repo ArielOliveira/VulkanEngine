@@ -1,9 +1,7 @@
-#ifndef RESOURCES_ENGINE_HPP
-#define RESOURCES_ENGINE_HPP
+#ifndef ENGINE_RESOURCE_ENGINE_HPP
+#define ENGINE_RESOURCE_ENGINE_HPP
 
 #include <engine/resourceManager.hpp>
-#include <engine/resourceHandle.hpp>
 #include <engine/resourceManager.tpp>
-#include <engine/resourceHandle.tpp>
 
 #endif

@@ -28,9 +28,6 @@ namespace Graphics {
             Renderer& operator=(Renderer&&) noexcept = delete;
 
             void createSyncObjects();
-            void loadModel();
-            void createVertexBuffer();
-            void createIndexBuffer();
             void createUniformBuffers();
             
             void updateUniformBuffer(uint32_t frameIndex);
@@ -53,17 +50,11 @@ namespace Graphics {
             vk::raii::Semaphore renderingSemaphore = nullptr;
             vector<vk::raii::Fence> inFlightFences;
 
-            vector<Graphics::Models::Vertex> vertices;
-            vector<uint32_t> indices;
-
             vector<vk::raii::Buffer>       uniformBuffers;
             vector<vk::raii::DeviceMemory> uniformBuffersMemory;
             vector<void*>                  uniformBuffersMapped;
 
-            vk::raii::Buffer vertexBuffer                                 = nullptr;
-            vk::raii::Buffer indexBuffer                                  = nullptr;
-            vk::raii::DeviceMemory vertexBufferMemory                     = nullptr;
-            vk::raii::DeviceMemory indexBufferMemory                      = nullptr;
+            //ResourceHandle<Model> model = nullptr;
 
             uint32_t frameIndex    = 0;
             uint32_t timelineValue = 0;

@@ -37,8 +37,11 @@ namespace Utils {
             
             const size_t getSize()     const;
             const size_t getCapacity() const;
-
+            
             Slot& getSlot(const SlotKey& key);
+            const Slot& getSlot(const SlotKey& key) const;
+            
+            const T& operator[](const SlotKey& key) const;
         private:
             uint32_t allocationChunkSize;
             uint32_t freeHead;
