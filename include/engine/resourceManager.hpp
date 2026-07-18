@@ -90,7 +90,7 @@ namespace Engine::Resources {
         VkBuffer vertexBuffer;
         VkBuffer indexBuffer;
         
-        VkIndexType indexType;
+        vk::IndexType indexType;
 
         uint32_t vertexCount;
         uint32_t indexCount;

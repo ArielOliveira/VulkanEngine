@@ -5,6 +5,8 @@
 
 #include <unordered_map>
 
+#include <engine/resourceManager.tpp>
+
 namespace Graphics {
     Renderer& Renderer::getInstance() {
         static Renderer instance;
@@ -28,7 +30,7 @@ namespace Graphics {
                                vk::ImageAspectFlagBits::eColor,
                                vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled);
                         
-        //model = ResourceHandle<Model>(ResourceManager::getInstance().load(Engine::Paths::MODELS + std::string("HierarchyTest.glb")));
+        model = ResourceHandle<Model>(Engine::ResourceManager::getInstance().load(Engine::Paths::MODELS + std::string("viking_room_2.glb")));
         
         //particleSystem = TutorialParticleSystem(swapChain.getExtent().width, swapChain.getExtent().height, 4096);
 
@@ -40,10 +42,10 @@ namespace Graphics {
 
         vk::SemaphoreTypeCreateInfo semaphoreCreateInfo { .semaphoreType = vk::SemaphoreType::eTimeline, .initialValue = 0};
         renderingSemaphore = vk::raii::Semaphore(core.getDevice(), { .pNext = &semaphoreCreateInfo });
-        //createUniformBuffers();
+        createUniformBuffers();
 
-        graphicsPipeline.createGraphicsDescriptorPool(core.getDevice());
-        graphicsPipeline.createGraphicsDescriptorSets(core.getDevice(), uniformBuffers, { modelTexture.getSampler(), modelTexture.getImageView(), vk::ImageLayout::eShaderReadOnlyOptimal });
+        //graphicsPipeline.createGraphicsDescriptorPool(core.getDevice());
+        //graphicsPipeline.createGraphicsDescriptorSets(core.getDevice(), uniformBuffers, { modelTexture.getSampler(), modelTexture.getImageView(), vk::ImageLayout::eShaderReadOnlyOptimal });
 
         createSyncObjects();
     }
@@ -115,7 +117,7 @@ namespace Graphics {
 
         Texture::updateImageLayout(renderPass, colorBarrier, frameIndex);
 
-        vk::ClearValue clearColor = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f);
+        vk::ClearValue clearColor = vk::ClearColorValue(0.25f, 0.25f, 0.25f, 1.0f);
         vk::ClearValue clearDepth = vk::ClearDepthStencilValue(1.0f, 0.0f);
 
         vk::RenderingAttachmentInfo colorAttachmentInfo {
@@ -151,13 +153,16 @@ namespace Graphics {
         renderPass[frameIndex].setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapChain.getExtent()));
         //renderPass[frameIndex].bindVertexBuffers(0, {*particleSystem.getStorageBuffer(frameIndex)}, {0});
         //renderPass[frameIndex].draw(particleSystem.getParticleCount(), 1, 0, 0);
-
-        //model.data();
         
-        //renderPass[frameIndex].bindVertexBuffers(0, vertexBuffer, {0});
-        //renderPass[frameIndex].bindIndexBuffer(*indexBuffer, 0, vk::IndexTypeValue<decltype(indices)::value_type>::value);
-        renderPass[frameIndex].bindDescriptorSets(vk::PipelineBindPoint::eGraphics, graphicsPipeline.getPipelineLayout(), 0, *graphicsPipeline.getDescriptorSet(frameIndex), nullptr);
-        //renderPass[frameIndex].drawIndexed(static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+        auto& mesh = model.data().scenes[0].data().meshes[0].first.data();
+
+        const VkBuffer& vertexBuffer = mesh.vertexBuffer;
+        const VkBuffer& indexBuffer  = mesh.indexBuffer;
+        
+        renderPass[frameIndex].bindVertexBuffers(0, { vertexBuffer }, {0});
+        renderPass[frameIndex].bindIndexBuffer({ indexBuffer }, 0, mesh.indexType);
+        //renderPass[frameIndex].bindDescriptorSets(vk::PipelineBindPoint::eGraphics, graphicsPipeline.getPipelineLayout(), 0, *graphicsPipeline.getDescriptorSet(frameIndex), nullptr);
+        renderPass[frameIndex].drawIndexed(static_cast<uint32_t>(mesh.indexCount), 1, 0, 0, 0);
         renderPass[frameIndex].endRendering();
 
         colorBarrier.srcStageMask  = vk::PipelineStageFlagBits2::eColorAttachmentOutput; colorBarrier.dstStageMask  = vk::PipelineStageFlagBits2::eBottomOfPipe;
@@ -200,19 +205,23 @@ namespace Graphics {
 
         device.resetFences(*inFlightFences[frameIndex]);
 
-        uint64_t computeWaitValue      = timelineValue;
+        /*uint64_t computeWaitValue      = timelineValue;
         uint64_t computeSignalValue    = ++timelineValue;
         uint64_t graphicsWaitValue     = computeSignalValue;
-        uint64_t graphicsSignalValue   = ++timelineValue;
+        uint64_t graphicsSignalValue   = ++timelineValue;*/
 
+        uint64_t graphicsWaitValue   =   timelineValue;
+        uint64_t graphicsSignalValue = ++timelineValue;
+
+        updateUniformBuffer(frameIndex);
         //particleSystem.updateUniformBuffer(frameIndex);
         //particleSystem.recordComputePass(computePipeline, frameIndex);
         //particleSystem.executeComputePass(renderingSemaphore, computeWaitValue, computeSignalValue, frameIndex);
 
         recordRenderPass(imageIndex);
 
-        //vk::PipelineStageFlags waitDestinationStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput);
-        vk::PipelineStageFlags waitDestinationStageMask(vk::PipelineStageFlagBits::eVertexInput);
+        vk::PipelineStageFlags waitDestinationStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput);
+        //vk::PipelineStageFlags waitDestinationStageMask(vk::PipelineStageFlagBits::eVertexInput);
 
         vk::TimelineSemaphoreSubmitInfo graphicsTimelineInfo {
             .waitSemaphoreValueCount   = 1,
@@ -231,7 +240,7 @@ namespace Graphics {
             .signalSemaphoreCount = 1,
             .pSignalSemaphores    = &*renderingSemaphore
         };
-        
+
         renderPass.submitOnIdle(graphicsSubmitInfo, nullptr, frameIndex);
 
         vk::SemaphoreWaitInfo waitInfo {

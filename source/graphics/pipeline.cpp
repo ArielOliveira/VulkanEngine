@@ -129,8 +129,8 @@ namespace Graphics {
         vk::raii::DescriptorSetLayout descriptorSetLayout = vk::raii::DescriptorSetLayout(device, layoutInfo);
 
         vk::PipelineLayoutCreateInfo pipelineLayoutInfo {
-            .setLayoutCount         = 1,
-            .pSetLayouts            = &*descriptorSetLayout,
+            .setLayoutCount         = 0,
+            .pSetLayouts            = {},
             .pushConstantRangeCount = 0
         };
 
@@ -337,7 +337,7 @@ namespace Graphics {
         std::cout << layouts.size() << '\n';
         std::cout << descriptorSets.size() << '\n';
 
-        for (size_t i = 0; i < Models::MAX_FRAMES_IN_FLIGHT; i++) {
+        /*for (size_t i = 0; i < Models::MAX_FRAMES_IN_FLIGHT; i++) {
             vk::DescriptorBufferInfo bufferInfo {
                 .buffer = uniformBuffers[i],
                 .offset = 0,
@@ -361,7 +361,7 @@ namespace Graphics {
             }};
 
             device.updateDescriptorSets(descriptorWrites, {});
-        }
+        }*/
     }
 
     void Pipeline::createComputeDescriptorPool(const vk::raii::Device &device) {

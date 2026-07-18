@@ -12,6 +12,10 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <engine/resourceManager.hpp>
+using Engine::ResourceHandle;
+using Engine::Resources::Model;
+
 #include <vector>
 
 using std::vector;
@@ -54,7 +58,7 @@ namespace Graphics {
             vector<vk::raii::DeviceMemory> uniformBuffersMemory;
             vector<void*>                  uniformBuffersMapped;
 
-            //ResourceHandle<Model> model = nullptr;
+            ResourceHandle<Model> model = nullptr;
 
             uint32_t frameIndex    = 0;
             uint32_t timelineValue = 0;

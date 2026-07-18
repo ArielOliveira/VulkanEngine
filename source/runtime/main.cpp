@@ -7,20 +7,20 @@
 #include <graphics/core.hpp>
 #include <graphics/renderer.hpp>
 
+#include <engine/resourceManager.hpp>
 
 using Graphics::Core;
 using Graphics::Renderer;
 
 using Runtime::Application;
 
-//using Engine::ResourceManager;
-//using Engine::ResourceHandle;
+using Engine::ResourceManager;
 
 using std::cout;
 using std::endl;
 
 int main(int argc, char** args) { 
-    //ResourceManager& rm = ResourceManager::getInstance();
+    ResourceManager& rm = ResourceManager::getInstance();
 
     Application& application = Application::getInstance();
     Core& core = Core::getInstance();
