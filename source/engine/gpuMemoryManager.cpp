@@ -65,11 +65,22 @@ namespace Engine {
     }
 
     void GPUMemoryManager::allocateBuffer(VkBuffer& buffer, VmaAllocation& allocation, VkDeviceSize size, VkBufferUsageFlags usage) {
-         VkBufferCreateInfo bufferInfo {
+        VkBufferCreateInfo bufferInfo {
             .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
             .size  = size,
             .usage = usage
-        };
+        };        
+
+        if (Graphics::Core::getInstance().hasDedicatedTransferQueue()) {
+            std::array transferAndGraphicsQueues { 
+                Graphics::Core::getInstance().getGraphicsQueueIndex(),
+                Graphics::Core::getInstance().getTransferQueueIndex()
+            };
+
+            bufferInfo.sharingMode = VK_SHARING_MODE_CONCURRENT;
+            bufferInfo.queueFamilyIndexCount = 2;
+            bufferInfo.pQueueFamilyIndices = &transferAndGraphicsQueues[0];
+        }
 
         VmaAllocationCreateInfo allocationCreateInfo {
             .usage = VMA_MEMORY_USAGE_AUTO
@@ -86,11 +97,14 @@ namespace Engine {
         VkDeviceSize written = 0;
 
         while (written < size) {
+            
             VkDeviceSize chunkSize = std::min(stagingBuffer.capacity, size - written);
+            
+            std::cout << "Writting GPU memory: " << written << "/" << size << '\n';
 
-            memcpy(stagingBuffer.allocInfo.pMappedData, (const char*)src + written, chunkSize);
+            memcpy(stagingBuffer.allocInfo.pMappedData, (const char*)src + written, (size_t)chunkSize);
 
-            CommandBuffer::singleTimeTransfer().copyBuffer(stagingBuffer.buffer, buffer, vk::BufferCopy(0, written, chunkSize));
+            CommandBuffer::singleTimeTransfer().copyBuffer(stagingBuffer.buffer, buffer, vk::BufferCopy(0, written, chunkSize)).submit();
 
             written += chunkSize;
         }

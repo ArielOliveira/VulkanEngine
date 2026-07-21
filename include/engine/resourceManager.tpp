@@ -4,35 +4,8 @@
 #include <engine/resourceManager.hpp>
 
 namespace Engine {
-    ResourceManager& ResourceManager::getInstance() {
-        static ResourceManager instance;
-
-        return instance;
-    }
-
-    ResourceManager::ResourceManager() { 
-        // Ensures order of initialization 
-        // GPU memory allocator is guaranteed to be initialized by the time 
-        // it is needed
-        GPUMemoryManager::getInstance(); 
-    }
-
-    ResourceManager::~ResourceManager() {}
-
-    SlotKey* const ResourceManager::findKeyByName(const std::type_index& typeId, const std::string& name) { 
-        auto it = cache.find(typeId);
-        
-        if (it == cache.end()) return nullptr;
-
-        try {
-            return &it->second.at(name);
-        } catch(std::exception e) {
-            return  nullptr;
-        }
-    }
-
     template<>
-    const ResourceHandle<Mesh> ResourceManager::load<Mesh>(const std::string& sourceName, const Asset& asset, const size_t resourceIndex) {
+    inline const ResourceHandle<Mesh> ResourceManager::load<Mesh>(const std::string& sourceName, const Asset& asset, const size_t resourceIndex) {
         auto& meshR = asset.meshes[resourceIndex];
         std::string resourceName = sourceName + "#" + std::string(meshR.name.c_str());
         
@@ -52,20 +25,25 @@ namespace Engine {
         mesh.smIndexOffset.reserve(meshR.primitives.size());
         mesh.smIndexCount.reserve(meshR.primitives.size());
         mesh.smVertexOffset.reserve(meshR.primitives.size());
+        mesh.smMaterials.reserve(meshR.primitives.size());
         
         size_t vertexCount  = 0;
-        size_t indexCount = 0;
+        size_t indexCount   = 0;
         for (auto& primitive : meshR.primitives) {
             auto* posIt  = primitive.findAttribute("POSITION");
             
             assert(posIt != nullptr);
-            assert(primitive.indicesAccessor.has_value());
 
-            auto& posAccessor     = asset.accessors[posIt->accessorIndex];
-            auto& indicesAccessor = asset.accessors[primitive.indicesAccessor.value()];
+            auto& posAccessor                         = asset.accessors[posIt->accessorIndex];
+            const fastgltf::Accessor* indicesAccessor = nullptr;
+
+            if (primitive.indicesAccessor.has_value())
+                indicesAccessor = &asset.accessors[primitive.indicesAccessor.value()];
 
             vertexCount          += posAccessor.count;
-            indexCount           += indicesAccessor.count;
+
+            if (indicesAccessor)
+                indexCount += indicesAccessor->count;
         }
 
         mesh.vertexCount = vertexCount;
@@ -100,6 +78,8 @@ namespace Engine {
             
             for (size_t vertex = 0; vertex < posAccessor.count; vertex++) {
                 glm::vec3 pos   = fastgltf::getAccessorElement<glm::vec3>(asset, posAccessor, vertex);
+                pos.y *= -1;
+
                 glm::vec3 color;
                 glm::vec2 uv0;
 
@@ -112,29 +92,36 @@ namespace Engine {
                 vertices.emplace_back(pos, color, uv0);
             }
 
-            auto& indicesAccessor = asset.accessors[primitive.indicesAccessor.value()];
-
-            fastgltf::iterateAccessor<uint32_t>(asset, indicesAccessor, [&](uint32_t index) {
-                indices.push_back(index);
-            });
+            const auto* indicesAccessor = primitive.indicesAccessor.has_value() ? &asset.accessors[primitive.indicesAccessor.value()] : nullptr;
+            
+            if (indicesAccessor != nullptr) {
+                fastgltf::iterateAccessor<uint32_t>(asset, *indicesAccessor, [&](uint32_t index) {
+                    indices.push_back(index);
+                });
+                
+                mesh.smIndexCount.push_back(static_cast<uint32_t>(indicesAccessor->count));
+                mesh.smIndexOffset.push_back(static_cast<uint32_t>(indexOffset));
+                indexOffset  += indices.size();
+            }
 
             mesh.smVertexOffset.push_back(static_cast<uint32_t>(vertexOffset));
-            mesh.smIndexOffset.push_back(static_cast<uint32_t>(indexOffset));
-            mesh.smIndexCount.push_back(static_cast<uint32_t>(indicesAccessor.count));
-
+            
             vertexOffset += vertices.size();
-            indexOffset  += indices.size();
         }
+
+        std::cout << "Mesh " << resourceName << " has " << vertices.size() << "|" << mesh.vertexCount << " vertices" << '\n';
 
         GPUMemoryManager::getInstance().uploadDataToGPU(
                         mesh.vertexBuffer, mesh.vertexAllocation, 
-                        vertices.data(), vertices.size(), 
+                        vertices.data(), sizeof(vertices[0]) * vertices.size(), 
                         VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
-
-        GPUMemoryManager::getInstance().uploadDataToGPU(
-                        mesh.indexBuffer, mesh.indexAllocation, 
-                        indices.data(), indices.size(), 
-                        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+        
+        if (indices.size() > 0) {
+            GPUMemoryManager::getInstance().uploadDataToGPU(
+                            mesh.indexBuffer, mesh.indexAllocation, 
+                            indices.data(), sizeof(indices[0]) * indices.size(), 
+                            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+        }
 
         std::cout << "Registering mesh " << resourceName.c_str() << '\n';
         SlotKey key = pools.get<Mesh>().insert(mesh);
@@ -145,7 +132,7 @@ namespace Engine {
     }
 
     template<>
-    const ResourceHandle<Scene> ResourceManager::load<Scene>(const std::string& sourceName, const Asset& asset, const size_t resourceIndex) {
+    inline const ResourceHandle<Scene> ResourceManager::load<Scene>(const std::string& sourceName, const Asset& asset, const size_t resourceIndex) {
         auto& sceneStr = asset.scenes[resourceIndex];
         std::string resourceName =  std::string(sourceName.c_str()) + "#" + std::string(sceneStr.name.c_str());
 
@@ -204,7 +191,7 @@ namespace Engine {
         return std::move(ResourceHandle<Scene>(key));
     }
 
-    const ResourceHandle<Model> ResourceManager::load(const std::string& path) {
+    inline const ResourceHandle<Model> ResourceManager::load(const std::string& path) {
         assert(findKeyByName(std::type_index(typeid(Model)), path) == nullptr);
 
         std::cout << "Loading model: " << path << '\n';
@@ -251,7 +238,7 @@ namespace Engine {
     }
 
     template <>
-    void ResourceManager::release<Mesh>(const SlotKey& key, const PassKey<ResourceHandle<Mesh>>&) {
+    inline void ResourceManager::release<Mesh>(const SlotKey& key, const PassKey<ResourceHandle<Mesh>>&) {
         auto& pool = pools.get<Mesh>();
         
         assert(key.generations == pool.getSlot(key).generations);
@@ -277,48 +264,6 @@ namespace Engine {
         assert(key.generations == pool.getSlot(key).generations);
 
         return pool[key];
-    }
-
-    template <typename T>
-    ResourceHandle<T>::ResourceHandle(std::nullptr_t) noexcept : key({~0U, ~0U}) {}
-
-    template <typename T>
-    ResourceHandle<T>::ResourceHandle(SlotKey key) noexcept : key(key) {
-        ResourceManager::getInstance().acquire<T>(key, {});
-    }
-
-    template <typename T>
-    ResourceHandle<T>::ResourceHandle(const ResourceHandle& rhs) noexcept : key(rhs.key) {
-        ResourceManager::getInstance().acquire<T>(key, {});
-    }
-
-    template <typename T>
-    ResourceHandle<T>::ResourceHandle(ResourceHandle&& rhs) noexcept { std::swap(key, rhs.key); }
-
-    template <typename T>
-    ResourceHandle<T>::~ResourceHandle() noexcept {
-        if (key.index != ~0U)
-        ResourceManager::getInstance().release<T>(key, {});
-    }
-
-    template <typename T>
-    const ResourceHandle<T>& ResourceHandle<T>::operator=(std::nullptr_t) noexcept {
-        key = { ~0U, ~0U };
-    }
-
-    template <typename T>
-    ResourceHandle<T>& ResourceHandle<T>::operator=(ResourceHandle&& rhs) noexcept {
-        if (this != &rhs) 
-            std::swap(key, rhs.key);
-        
-        rhs.key = { ~0U, ~0U };
-
-        return *this;
-    }
-
-    template <typename T>
-    const T& ResourceHandle<T>::data() const {
-        return ResourceManager::getInstance().get<T>(key, {});
     }
 }
 

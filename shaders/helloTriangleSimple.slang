@@ -17,24 +17,24 @@ struct UniformBuffer {
 };
 
 ConstantBuffer<UniformBuffer> ubo;
-Sampler2D texture;
 
 float4 objectToWorld(float4 localPos) {
     return mul(ubo.proj, mul(ubo.view, mul(ubo.model, localPos)));
 }
 
 [shader("vertex")]
-VSOutput vertMain(VSInput input) {
+VSOutput vertMain(VSInput input, uint vid : SV_VertexID) {
     VSOutput output;
     output.pos      = objectToWorld(float4(input.inPosition, 1.0));
-    output.color    = input.inColor;
+    output.color    = float3(input.inColor);
     output.texCoord = input.inTexCoord;
     return output;
 }
 
 [shader("fragment")]
 float4 fragMain(VSOutput vertIn) : SV_TARGET {
-    //return texture.Sample(vertIn.texCoord) * float4(vertIn.color, 1.0f);
-
+    // return texture.Sample(vertIn.texCoord) * float4(vertIn.color, 1.0f);
     return float4(vertIn.texCoord, 0.0f, 1.0f);
+
+    //return float4(vertIn.color, 1.0f);
 }

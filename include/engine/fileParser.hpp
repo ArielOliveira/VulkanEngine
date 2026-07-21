@@ -8,10 +8,12 @@ using fastgltf::Parser;
 using fastgltf::Expected;
 using fastgltf::Asset;
 
+#include <filesystem>
+
 namespace Engine::Paths {
-    constexpr const char* MODELS            = "models/";
-    constexpr const char* TEXTURES          = "textures/";
-    constexpr const char* SHADERS           = "./spirv/";
+    const std::filesystem::path MODELS            = "../../models/";
+    const std::filesystem::path TEXTURES          = "../../textures/";
+    const std::filesystem::path SHADERS           = "./spirv/";
 }
 
 namespace Engine::FileParser {

@@ -5,7 +5,7 @@
 
 #include <unordered_map>
 
-#include <engine/resourceManager.tpp>
+#include <engine/resourceEngine.hpp>
 
 namespace Graphics {
     Renderer& Renderer::getInstance() {
@@ -18,19 +18,22 @@ namespace Graphics {
         const Core& core = Core::getInstance();
 
         swapChain        = SwapChain(core.getSurface(), core.getPhysicalDevice(), core.getDevice());
-        graphicsPipeline = Pipeline::createGraphicsPipelinePointList(core.getDevice(), swapChain.getExtent(), swapChain.getSurfaceFormat(), core.findDepthFormat());
+
+        graphicsPipeline = Pipeline::createSimpleGraphicsPipeline(core.getDevice(), swapChain.getExtent(), swapChain.getSurfaceFormat());
+        //graphicsPipeline = Pipeline::createGraphicsPipelinePointList(core.getDevice(), swapChain.getExtent(), swapChain.getSurfaceFormat(), core.findDepthFormat(), core.getMaxUsableSampleCount());
         //computePipeline  = Pipeline::createComputePipeline(core.getDevice());
         renderPass       = CommandBuffer(core.getGraphicsCommandPool(), &core.getGraphicsQueue(), vk::CommandBufferLevel::ePrimary, Models::MAX_FRAMES_IN_FLIGHT);
 
         colorResolve  = Texture::createColorResolve(swapChain);
         depthBuffer   = Texture::createDepthBuffer(swapChain);
-        modelTexture  = Texture(std::string("viking_room.png"), 
+        /*modelTexture  = Texture(std::string("viking_room.png"), 
                                vk::Format::eR8G8B8A8Srgb, 
                                vk::ImageTiling::eOptimal, 
                                vk::ImageAspectFlagBits::eColor,
-                               vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled);
-                        
-        model = ResourceHandle<Model>(Engine::ResourceManager::getInstance().load(Engine::Paths::MODELS + std::string("viking_room_2.glb")));
+                               vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled);*/
+        
+        std::string path = (Runtime::FileHelper::getExecutablePath() / Engine::Paths::MODELS / "viking_room.glb").string();
+        model = ResourceHandle<Model>(Engine::ResourceManager::getInstance().load(path));
         
         //particleSystem = TutorialParticleSystem(swapChain.getExtent().width, swapChain.getExtent().height, 4096);
 
@@ -40,9 +43,30 @@ namespace Graphics {
         //for (uint32_t i = 0; i < Models::MAX_FRAMES_IN_FLIGHT; i++)
         //    particleSystem.recordComputePass(computePipeline, i);
 
+        /*testMesh.name         = "Quad";
+        testMesh.indexType    = vk::IndexType::eUint16;
+        testMesh.vertexCount  = Graphics::Primitives::quadVertices.size();
+        testMesh.indexCount   = Graphics::Primitives::quadIndices.size();
+        
+        Engine::GPUMemoryManager::getInstance().uploadDataToGPU(testMesh.vertexBuffer, testMesh.vertexAllocation, 
+            Graphics::Primitives::quadVertices.data(), 
+            sizeof(Graphics::Primitives::quadVertices[0]) * Graphics::Primitives::quadVertices.size(),
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+
+        Engine::GPUMemoryManager::getInstance().uploadDataToGPU(testMesh.indexBuffer, testMesh.indexAllocation, 
+            Graphics::Primitives::quadIndices.data(), 
+            sizeof(Graphics::Primitives::quadIndices[0]) * Graphics::Primitives::quadIndices.size(),
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);*/
+
+        //createVertexBuffer();
+        //createIndexBuffer();
+
         vk::SemaphoreTypeCreateInfo semaphoreCreateInfo { .semaphoreType = vk::SemaphoreType::eTimeline, .initialValue = 0};
         renderingSemaphore = vk::raii::Semaphore(core.getDevice(), { .pNext = &semaphoreCreateInfo });
         createUniformBuffers();
+
+        graphicsPipeline.createSimpleGraphicsDescriptorPool(core.getDevice());
+        graphicsPipeline.createSimpleGraphicsDescriptorSets(core.getDevice(), uniformBuffers);
 
         //graphicsPipeline.createGraphicsDescriptorPool(core.getDevice());
         //graphicsPipeline.createGraphicsDescriptorSets(core.getDevice(), uniformBuffers, { modelTexture.getSampler(), modelTexture.getImageView(), vk::ImageLayout::eShaderReadOnlyOptimal });
@@ -112,15 +136,15 @@ namespace Graphics {
         
         // Wrost function signature ever
         // TODO: See how this can be improved
-        colorResolve.updateImageLayout(renderPass, vk::ImageLayout::eColorAttachmentOptimal, vk::AccessFlagBits2::eColorAttachmentWrite, vk::PipelineStageFlagBits2::eColorAttachmentOutput, frameIndex, true);
-        depthBuffer.updateImageLayout(renderPass, vk::ImageLayout::eDepthAttachmentOptimal, vk::AccessFlagBits2::eDepthStencilAttachmentWrite,  depthStageFlags, frameIndex, true);
+        //colorResolve.updateImageLayout(renderPass, vk::ImageLayout::eColorAttachmentOptimal, vk::AccessFlagBits2::eColorAttachmentWrite, vk::PipelineStageFlagBits2::eColorAttachmentOutput, frameIndex, true);
+        //depthBuffer.updateImageLayout(renderPass, vk::ImageLayout::eDepthAttachmentOptimal, vk::AccessFlagBits2::eDepthStencilAttachmentWrite,  depthStageFlags, frameIndex, true);
 
         Texture::updateImageLayout(renderPass, colorBarrier, frameIndex);
 
-        vk::ClearValue clearColor = vk::ClearColorValue(0.25f, 0.25f, 0.25f, 1.0f);
+        vk::ClearValue clearColor = vk::ClearColorValue(0.1f, 0.1f, 0.1f, 1.0f);
         vk::ClearValue clearDepth = vk::ClearDepthStencilValue(1.0f, 0.0f);
 
-        vk::RenderingAttachmentInfo colorAttachmentInfo {
+        /*vk::RenderingAttachmentInfo colorAttachmentInfo {
             .imageView          = colorResolve.getImageView(),
             .imageLayout        = vk::ImageLayout::eColorAttachmentOptimal,
             .resolveMode        = vk::ResolveModeFlagBits::eAverage,
@@ -129,22 +153,30 @@ namespace Graphics {
             .loadOp             = vk::AttachmentLoadOp::eClear,
             .storeOp            = vk::AttachmentStoreOp::eStore,
             .clearValue         = clearColor
-        };
+        };*/
 
-        vk::RenderingAttachmentInfo depthAttachmentInfo {
+        /*vk::RenderingAttachmentInfo depthAttachmentInfo {
             .imageView      = *depthBuffer.getImageView(),
             .imageLayout    = vk::ImageLayout::eDepthAttachmentOptimal,
             .loadOp         = vk::AttachmentLoadOp::eClear,
             .storeOp        = vk::AttachmentStoreOp::eDontCare,
             .clearValue     = clearDepth
+        };*/
+
+        vk::RenderingAttachmentInfo colorAttachmentInfo {
+            .imageView          = swapChain.getImageView(imageIndex),
+            .imageLayout        = vk::ImageLayout::eColorAttachmentOptimal,
+            .resolveMode        = vk::ResolveModeFlagBits::eNone,
+            .loadOp             = vk::AttachmentLoadOp::eClear,
+            .storeOp            = vk::AttachmentStoreOp::eStore,
+            .clearValue         = clearColor
         };
 
         vk::RenderingInfo renderingInfo = {
             .renderArea           = {.offset = {0, 0}, .extent = swapChain.getExtent()},
             .layerCount           = 1,
             .colorAttachmentCount = 1,
-            .pColorAttachments    = &colorAttachmentInfo,
-            .pDepthAttachment     = &depthAttachmentInfo
+            .pColorAttachments    = &colorAttachmentInfo
         };
 
         renderPass[frameIndex].beginRendering(renderingInfo);
@@ -156,13 +188,22 @@ namespace Graphics {
         
         auto& mesh = model.data().scenes[0].data().meshes[0].first.data();
 
+        renderPass[frameIndex].bindDescriptorSets(vk::PipelineBindPoint::eGraphics, graphicsPipeline.getPipelineLayout(), 0, *graphicsPipeline.getDescriptorSet(frameIndex), nullptr);
+    
         const VkBuffer& vertexBuffer = mesh.vertexBuffer;
         const VkBuffer& indexBuffer  = mesh.indexBuffer;
         
         renderPass[frameIndex].bindVertexBuffers(0, { vertexBuffer }, {0});
-        renderPass[frameIndex].bindIndexBuffer({ indexBuffer }, 0, mesh.indexType);
-        //renderPass[frameIndex].bindDescriptorSets(vk::PipelineBindPoint::eGraphics, graphicsPipeline.getPipelineLayout(), 0, *graphicsPipeline.getDescriptorSet(frameIndex), nullptr);
-        renderPass[frameIndex].drawIndexed(static_cast<uint32_t>(mesh.indexCount), 1, 0, 0, 0);
+
+        if (mesh.indexCount > 0) {
+            renderPass[frameIndex].bindIndexBuffer({ indexBuffer }, 0, mesh.indexType);
+            renderPass[frameIndex].drawIndexed(mesh.indexCount, 1, 0, 0, 0);
+        } else {
+            renderPass[frameIndex].draw(mesh.vertexCount, 1, 0, 0);
+        }
+
+        //renderPass[frameIndex].bindIndexBuffer({ indexBuffer }, 0, mesh.indexType);
+        //renderPass[frameIndex].drawIndexed(static_cast<uint32_t>(mesh.indexCount), 1, 0, 0, 0);
         renderPass[frameIndex].endRendering();
 
         colorBarrier.srcStageMask  = vk::PipelineStageFlagBits2::eColorAttachmentOutput; colorBarrier.dstStageMask  = vk::PipelineStageFlagBits2::eBottomOfPipe;
@@ -177,10 +218,10 @@ namespace Graphics {
         const vk::raii::Device& device                 = Core::getInstance().getDevice();
         const vk::raii::SurfaceKHR& surface            = Core::getInstance().getSurface();
         const vk::raii::Queue& graphicsQueue           = Core::getInstance().getGraphicsQueue();
-
+        
         auto [result, imageIndex] = swapChain.acquireNextImage(UINT64_MAX, nullptr, inFlightFences[frameIndex]);
         vk::Result fenceResult = device.waitForFences(*inFlightFences[frameIndex], vk::True, UINT64_MAX);
-        
+
         if (fenceResult != vk::Result::eSuccess) 
             throw std::runtime_error("failed to wait for fence!");
         

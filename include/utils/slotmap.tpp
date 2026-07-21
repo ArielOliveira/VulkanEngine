@@ -2,6 +2,7 @@
 #define SLOT_MAP_TPP
 
 #include <utils/slotmap.hpp>
+#include <cassert>
 
 namespace Utils {
     template <typename T, typename Slot>

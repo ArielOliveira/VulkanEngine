@@ -22,6 +22,7 @@ namespace Graphics {
             Pipeline(std::nullptr_t) noexcept;
 
             static Pipeline createGraphicsPipeline(const vk::raii::Device &device, const vk::Extent2D &swapChain, const vk::SurfaceFormatKHR &swapChainSurfaceFormat, vk::Format depthFormat, vk::SampleCountFlagBits msaaSamples = vk::SampleCountFlagBits::e1);
+            static Pipeline createSimpleGraphicsPipeline(const vk::raii::Device &device, const vk::Extent2D &swapChainExtent, const vk::SurfaceFormatKHR &swapChainSurfaceFormat);
             static Pipeline createGraphicsPipelinePointList(const vk::raii::Device &device, const vk::Extent2D &swapChain, const vk::SurfaceFormatKHR &swapChainSurfaceFormat, vk::Format depthFormat, vk::SampleCountFlagBits msaaSamples = vk::SampleCountFlagBits::e1);
             static Pipeline createComputePipeline(const vk::raii::Device &device);
 
@@ -35,6 +36,9 @@ namespace Graphics {
             const vk::raii::PipelineLayout&      getPipelineLayout() const &;
             const vk::raii::DescriptorSetLayout& getDescriptorSetLayout() const &;
             
+            void createSimpleGraphicsDescriptorPool(const vk::raii::Device &device);
+            void createSimpleGraphicsDescriptorSets(const vk::raii::Device &device, const vector<vk::raii::Buffer> &uniformBuffers);
+
             void createGraphicsDescriptorPool(const vk::raii::Device &device);
             void createGraphicsDescriptorSets(const vk::raii::Device &device, const vector<vk::raii::Buffer> &uniformBuffers, const vk::DescriptorImageInfo &imageInfo);
 

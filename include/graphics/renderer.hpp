@@ -12,9 +12,10 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 
-#include <engine/resourceManager.hpp>
+#include <engine/resources.hpp>
 using Engine::ResourceHandle;
 using Engine::Resources::Model;
+using Engine::Resources::Mesh;
 
 #include <vector>
 
