@@ -5,8 +5,10 @@
 
 #include <vk_mem_alloc.h>
 
+#include <vulkan/vulkan_raii.hpp>
 
 constexpr uint32_t STAGING_BUFFER_SIZE = 16 * 1024 * 1024;
+
 
 namespace Engine {
     class GPUMemoryManager {
@@ -19,8 +21,11 @@ namespace Engine {
             GPUMemoryManager& operator=(const GPUMemoryManager&) = delete;
             GPUMemoryManager& operator=(GPUMemoryManager&&) noexcept = delete;
 
+            void releaseBuffer(VkImage& image, VmaAllocation& allocation);
             void releaseBuffer(VkBuffer& buffer, VmaAllocation& allocation);
-            void uploadDataToGPU(VkBuffer& buffer, VmaAllocation& allocation, const void* src, VkDeviceSize size, VkBufferUsageFlags usage);
+
+            void uploadDataToGPU(VkImage& image, VmaAllocation& allocation, const void* src, VkDeviceSize size, const VkImageCreateInfo& createInfo, vk::ImageAspectFlagBits imageAspect, uint32_t targetQueueIndex);
+            void uploadDataToGPU(VkBuffer& buffer, VmaAllocation& allocation, const void* src, VkDeviceSize size, VkBufferUsageFlags usage, uint32_t targetQueueIndex);
 
             ~GPUMemoryManager();
 
@@ -34,7 +39,8 @@ namespace Engine {
 
             void intializeAllocator();
             void createStagingBuffer();
-            void allocateBuffer(VkBuffer& buffer, VmaAllocation& allocation, VkDeviceSize size, VkBufferUsageFlags usage);
+            void allocateBuffer(VkImage& image, VmaAllocation& allocation, VkDeviceSize size, const VkImageCreateInfo& createInfo, uint32_t targetQueueIndex);
+            void allocateBuffer(VkBuffer& buffer, VmaAllocation& allocation, VkDeviceSize size, VkBufferUsageFlags usage, uint32_t targetQueueIndex);
 
             GPUMemoryManager();
 

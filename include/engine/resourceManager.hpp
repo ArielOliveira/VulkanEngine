@@ -13,10 +13,6 @@
 #include <fastgltf/glm_element_traits.hpp>
 #include <fastgltf/types.hpp>
 
-#include <graphics/models.hpp>
-
-#include <engine/fileParser.hpp>
-#include <engine/gpuMemoryManager.hpp>
 #include <engine/resourceHandle.hpp>
 #include <engine/resources.hpp>
 
@@ -45,7 +41,8 @@ namespace Engine {
 
             ~ResourceManager();
 
-            const ResourceHandle<Model> load(const std::string& path);
+            template <typename Resource>
+            const ResourceHandle<Resource> load(const std::string& path);
 
             template <typename Resource>
             const ResourceHandle<Resource> load(const std::string& sourceName, const Asset& asset, const size_t resourceIndex);

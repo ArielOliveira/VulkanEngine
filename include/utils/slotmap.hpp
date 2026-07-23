@@ -30,7 +30,7 @@ namespace Utils {
             SlotMap(uint32_t allocationChunkSize = 8, bool allowReallocation = true);
             ~SlotMap();    
             
-            const SlotKey insert(const T &value);
+            const SlotKey insert(const T &&value);
             void erase(const SlotKey& key);
             
             const T*     getRawData()  const;

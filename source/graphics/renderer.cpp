@@ -19,21 +19,19 @@ namespace Graphics {
 
         swapChain        = SwapChain(core.getSurface(), core.getPhysicalDevice(), core.getDevice());
 
-        graphicsPipeline = Pipeline::createSimpleGraphicsPipeline(core.getDevice(), swapChain.getExtent(), swapChain.getSurfaceFormat());
+        graphicsPipeline = Pipeline::createGraphicsPipeline(core.getDevice(), swapChain.getExtent(), swapChain.getSurfaceFormat(), core.findDepthFormat(), core.getMaxUsableSampleCount());
+        //graphicsPipeline = Pipeline::createSimpleGraphicsPipeline(core.getDevice(), swapChain.getExtent(), swapChain.getSurfaceFormat());
         //graphicsPipeline = Pipeline::createGraphicsPipelinePointList(core.getDevice(), swapChain.getExtent(), swapChain.getSurfaceFormat(), core.findDepthFormat(), core.getMaxUsableSampleCount());
         //computePipeline  = Pipeline::createComputePipeline(core.getDevice());
         renderPass       = CommandBuffer(core.getGraphicsCommandPool(), &core.getGraphicsQueue(), vk::CommandBufferLevel::ePrimary, Models::MAX_FRAMES_IN_FLIGHT);
 
         colorResolve  = Texture::createColorResolve(swapChain);
         depthBuffer   = Texture::createDepthBuffer(swapChain);
-        /*modelTexture  = Texture(std::string("viking_room.png"), 
-                               vk::Format::eR8G8B8A8Srgb, 
-                               vk::ImageTiling::eOptimal, 
-                               vk::ImageAspectFlagBits::eColor,
-                               vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled);*/
         
-        std::string path = (Runtime::FileHelper::getExecutablePath() / Engine::Paths::MODELS / "viking_room.glb").string();
-        model = ResourceHandle<Model>(Engine::ResourceManager::getInstance().load(path));
+        std::string modelPath   = (Runtime::FileHelper::getExecutablePath() / Engine::Paths::MODELS / "viking_room.glb").string();
+        std::string texturePath = (Runtime::FileHelper::getExecutablePath() / Engine::Paths::TEXTURES / "viking_room.ktx2").string();
+        model = ResourceHandle<Model>(Engine::ResourceManager::getInstance().load<Model>(modelPath));
+        modelTexture = ResourceHandle<Engine::Resources::Texture>(Engine::ResourceManager::getInstance().load<Engine::Resources::Texture>(texturePath));
         
         //particleSystem = TutorialParticleSystem(swapChain.getExtent().width, swapChain.getExtent().height, 4096);
 
@@ -43,33 +41,15 @@ namespace Graphics {
         //for (uint32_t i = 0; i < Models::MAX_FRAMES_IN_FLIGHT; i++)
         //    particleSystem.recordComputePass(computePipeline, i);
 
-        /*testMesh.name         = "Quad";
-        testMesh.indexType    = vk::IndexType::eUint16;
-        testMesh.vertexCount  = Graphics::Primitives::quadVertices.size();
-        testMesh.indexCount   = Graphics::Primitives::quadIndices.size();
-        
-        Engine::GPUMemoryManager::getInstance().uploadDataToGPU(testMesh.vertexBuffer, testMesh.vertexAllocation, 
-            Graphics::Primitives::quadVertices.data(), 
-            sizeof(Graphics::Primitives::quadVertices[0]) * Graphics::Primitives::quadVertices.size(),
-            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
-
-        Engine::GPUMemoryManager::getInstance().uploadDataToGPU(testMesh.indexBuffer, testMesh.indexAllocation, 
-            Graphics::Primitives::quadIndices.data(), 
-            sizeof(Graphics::Primitives::quadIndices[0]) * Graphics::Primitives::quadIndices.size(),
-            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);*/
-
-        //createVertexBuffer();
-        //createIndexBuffer();
-
         vk::SemaphoreTypeCreateInfo semaphoreCreateInfo { .semaphoreType = vk::SemaphoreType::eTimeline, .initialValue = 0};
         renderingSemaphore = vk::raii::Semaphore(core.getDevice(), { .pNext = &semaphoreCreateInfo });
         createUniformBuffers();
 
-        graphicsPipeline.createSimpleGraphicsDescriptorPool(core.getDevice());
-        graphicsPipeline.createSimpleGraphicsDescriptorSets(core.getDevice(), uniformBuffers);
+        //graphicsPipeline.createSimpleGraphicsDescriptorPool(core.getDevice());
+        //graphicsPipeline.createSimpleGraphicsDescriptorSets(core.getDevice(), uniformBuffers);
 
-        //graphicsPipeline.createGraphicsDescriptorPool(core.getDevice());
-        //graphicsPipeline.createGraphicsDescriptorSets(core.getDevice(), uniformBuffers, { modelTexture.getSampler(), modelTexture.getImageView(), vk::ImageLayout::eShaderReadOnlyOptimal });
+        graphicsPipeline.createGraphicsDescriptorPool(core.getDevice());
+        graphicsPipeline.createGraphicsDescriptorSets(core.getDevice(), uniformBuffers, { modelTexture.data().sampler, modelTexture.data().view, vk::ImageLayout::eShaderReadOnlyOptimal });
 
         createSyncObjects();
     }
@@ -136,15 +116,15 @@ namespace Graphics {
         
         // Wrost function signature ever
         // TODO: See how this can be improved
-        //colorResolve.updateImageLayout(renderPass, vk::ImageLayout::eColorAttachmentOptimal, vk::AccessFlagBits2::eColorAttachmentWrite, vk::PipelineStageFlagBits2::eColorAttachmentOutput, frameIndex, true);
-        //depthBuffer.updateImageLayout(renderPass, vk::ImageLayout::eDepthAttachmentOptimal, vk::AccessFlagBits2::eDepthStencilAttachmentWrite,  depthStageFlags, frameIndex, true);
+        colorResolve.updateImageLayout(renderPass, vk::ImageLayout::eColorAttachmentOptimal, vk::AccessFlagBits2::eColorAttachmentWrite, vk::PipelineStageFlagBits2::eColorAttachmentOutput, frameIndex, true);
+        depthBuffer.updateImageLayout(renderPass, vk::ImageLayout::eDepthAttachmentOptimal, vk::AccessFlagBits2::eDepthStencilAttachmentWrite,  depthStageFlags, frameIndex, true);
 
         Texture::updateImageLayout(renderPass, colorBarrier, frameIndex);
 
         vk::ClearValue clearColor = vk::ClearColorValue(0.1f, 0.1f, 0.1f, 1.0f);
         vk::ClearValue clearDepth = vk::ClearDepthStencilValue(1.0f, 0.0f);
 
-        /*vk::RenderingAttachmentInfo colorAttachmentInfo {
+        vk::RenderingAttachmentInfo colorAttachmentInfo {
             .imageView          = colorResolve.getImageView(),
             .imageLayout        = vk::ImageLayout::eColorAttachmentOptimal,
             .resolveMode        = vk::ResolveModeFlagBits::eAverage,
@@ -153,30 +133,31 @@ namespace Graphics {
             .loadOp             = vk::AttachmentLoadOp::eClear,
             .storeOp            = vk::AttachmentStoreOp::eStore,
             .clearValue         = clearColor
-        };*/
+        };
 
-        /*vk::RenderingAttachmentInfo depthAttachmentInfo {
+        vk::RenderingAttachmentInfo depthAttachmentInfo {
             .imageView      = *depthBuffer.getImageView(),
             .imageLayout    = vk::ImageLayout::eDepthAttachmentOptimal,
             .loadOp         = vk::AttachmentLoadOp::eClear,
             .storeOp        = vk::AttachmentStoreOp::eDontCare,
             .clearValue     = clearDepth
-        };*/
+        };
 
-        vk::RenderingAttachmentInfo colorAttachmentInfo {
+        /*vk::RenderingAttachmentInfo colorAttachmentInfo {
             .imageView          = swapChain.getImageView(imageIndex),
             .imageLayout        = vk::ImageLayout::eColorAttachmentOptimal,
             .resolveMode        = vk::ResolveModeFlagBits::eNone,
             .loadOp             = vk::AttachmentLoadOp::eClear,
             .storeOp            = vk::AttachmentStoreOp::eStore,
             .clearValue         = clearColor
-        };
+        };*/
 
         vk::RenderingInfo renderingInfo = {
             .renderArea           = {.offset = {0, 0}, .extent = swapChain.getExtent()},
             .layerCount           = 1,
             .colorAttachmentCount = 1,
-            .pColorAttachments    = &colorAttachmentInfo
+            .pColorAttachments    = &colorAttachmentInfo,
+            .pDepthAttachment     = &depthAttachmentInfo
         };
 
         renderPass[frameIndex].beginRendering(renderingInfo);

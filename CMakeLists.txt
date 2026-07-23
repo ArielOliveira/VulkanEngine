@@ -19,7 +19,7 @@ set(CMAKE_CXX_MODULE_STD ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 ################################################################################
 
-project(VulkanEngine LANGUAGES CXX VERSION 0.0.1.0)
+project(VulkanEngine LANGUAGES C CXX VERSION 0.0.1.0)
 
 configure_file(${INCLUDE_DIR}/version.hpp.in ${PROJECT_BINARY_DIR}/version.hpp)
 
@@ -29,7 +29,9 @@ list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/shaders")
 
 include(LibraryNames)
 include(ShaderCompiler)
+include(LibraryLinker)
 
+find_package(KTX CONFIG REQUIRED)
 find_package(fastgltf CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(VulkanMemoryAllocator CONFIG REQUIRED)
@@ -37,8 +39,7 @@ find_package(VulkanMemoryAllocator CONFIG REQUIRED)
 add_subdirectory(${LIB_DIR}/glfw)
 add_subdirectory(${LIB_DIR}/vulkan)
 
-add_executable(${PROJECT_NAME} ${ALL_SOURCES}
-    include/graphics/debugManager.hpp)
+add_executable(${PROJECT_NAME} ${ALL_SOURCES})
 
 target_link_libraries(${PROJECT_NAME} PRIVATE 
     glfw 
@@ -46,10 +47,12 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     GPUOpen::VulkanMemoryAllocator 
     glm::glm
     fastgltf::fastgltf
+    KTX::ktx
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${INCLUDE_DIR} ${PROJECT_BINARY_DIR})
 target_compile_definitions(${PROJECT_NAME} PRIVATE)
 
+copy_runtime_libs(${PROJECT_NAME})
 compile_slang_shaders(SHADERS ${SHADERS_DIR} "${PROJECT_BINARY_DIR}/$<CONFIG>")
 add_dependencies(${PROJECT_NAME} SHADERS)

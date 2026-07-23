@@ -8,6 +8,7 @@
 #include <graphics/renderer.hpp>
 
 #include <engine/resourceManager.hpp>
+#include <engine/fileParser.hpp>
 
 using Graphics::Core;
 using Graphics::Renderer;

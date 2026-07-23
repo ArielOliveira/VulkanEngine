@@ -48,7 +48,6 @@ namespace Graphics {
             CommandBuffer renderPass       = nullptr;
             Texture       colorResolve     = nullptr;
             Texture       depthBuffer      = nullptr;
-            Texture       modelTexture     = nullptr;
 
             TutorialParticleSystem particleSystem = nullptr;
 
@@ -59,7 +58,8 @@ namespace Graphics {
             vector<vk::raii::DeviceMemory> uniformBuffersMemory;
             vector<void*>                  uniformBuffersMapped;
 
-            ResourceHandle<Model> model = nullptr;
+            ResourceHandle<Model>                             model = nullptr;
+            ResourceHandle<Engine::Resources::Texture> modelTexture = nullptr;
 
             uint32_t frameIndex    = 0;
             uint32_t timelineValue = 0;

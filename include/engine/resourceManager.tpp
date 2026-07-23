@@ -1,9 +1,120 @@
 #ifndef ENGINE_RESOURCE_MANAGER_TPP
 #define ENGINE_RESOURCE_MANAGER_TPP
 
+#include <engine/fileParser.hpp>
+#include <engine/gpuMemoryManager.hpp>
 #include <engine/resourceManager.hpp>
 
+#include <graphics/core.hpp>
+#include <graphics/models.hpp>
+
+using Graphics::Core;
+
 namespace Engine {
+    template<>
+    inline const ResourceHandle<Texture> ResourceManager::load<Texture>(const std::string& path) {
+        assert(findKeyByName(std::type_index(typeid(Texture)), path) == nullptr);
+
+        std::cout << "Loading texture " << path << '\n';
+
+        auto [textureMetaData, handle] = FileParser::openTextureFile(path);
+
+        std::cout << std::to_string((uint32_t)vk::Format::eR8G8B8Srgb) << "|" << std::to_string(VK_FORMAT_R8G8B8_SRGB) << '\n';
+
+        std::cout << "Components count " << std::to_string(textureMetaData.channels) << '\n';
+
+        switch (textureMetaData.channels) {
+            case 3:
+            case 4:  textureMetaData.format = (uint32_t)vk::Format::eR8G8B8A8Srgb; break;
+        }
+
+        VkImageType imageType = textureMetaData.depth > 1 ? VK_IMAGE_TYPE_3D : 
+                           std::min(textureMetaData.height, textureMetaData.width) > 1 ? 
+                           VK_IMAGE_TYPE_2D : VK_IMAGE_TYPE_1D;
+
+        VkImageCreateInfo imageCreateInfo {
+            .sType         =  VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+            .imageType     = imageType,
+            .format        = (VkFormat)textureMetaData.format,
+            .extent        = { textureMetaData.width, textureMetaData.height, textureMetaData.depth },
+            .mipLevels     = 1,
+            .arrayLayers   = 1,
+            .samples       = VK_SAMPLE_COUNT_1_BIT,
+            .tiling        = VK_IMAGE_TILING_OPTIMAL,
+            .usage         = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            .sharingMode   = VK_SHARING_MODE_EXCLUSIVE
+        };
+
+        VkImage image;
+        VmaAllocation allocation;
+        GPUMemoryManager::getInstance().uploadDataToGPU(image, allocation, 
+                                          textureMetaData.data, textureMetaData.dataSize,
+                                          imageCreateInfo, 
+                                          vk::ImageAspectFlagBits::eColor,
+                                          Core::getInstance().getGraphicsQueueIndex());
+
+        VkImageViewCreateInfo viewInfo {
+            .sType            = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .image            = image,
+            .viewType         = VkImageViewType::VK_IMAGE_VIEW_TYPE_2D,
+            .format           = imageCreateInfo.format,
+            .subresourceRange = {.aspectMask = VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1}
+        };
+        
+        auto& device     = *Core::getInstance().getDevice();
+        
+        VkImageView view;
+        vkCreateImageView(device, &viewInfo, nullptr, &view);
+        
+        vk::PhysicalDeviceProperties properties = Core::getInstance().getPhysicalDevice().getProperties();
+
+        VkSamplerCreateInfo samplerInfo {
+            .sType                      = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+            .magFilter                  = VkFilter::VK_FILTER_LINEAR,
+            .minFilter                  = VkFilter::VK_FILTER_LINEAR,
+            .mipmapMode                 = VkSamplerMipmapMode::VK_SAMPLER_MIPMAP_MODE_LINEAR,
+            .addressModeU               = VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_REPEAT,
+            .addressModeV               = VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_REPEAT,
+            .addressModeW               = VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_REPEAT,
+            .mipLodBias                 = 0.0f,
+            .anisotropyEnable           = vk::True,
+            .maxAnisotropy              = properties.limits.maxSamplerAnisotropy,
+            .compareEnable              = vk::False,
+            .compareOp                  = VkCompareOp::VK_COMPARE_OP_ALWAYS,
+            .minLod                     = 0,
+            .maxLod                     = vk::LodClampNone,
+            .borderColor                = VkBorderColor::VK_BORDER_COLOR_INT_OPAQUE_BLACK,
+            .unnormalizedCoordinates    = vk::False
+        };
+
+        VkSampler sampler;
+        vkCreateSampler(device, &samplerInfo, nullptr, &sampler);
+
+        FileParser::closeTextureFile(handle);
+
+        std::cout << "Registering texture " << path.c_str() << '\n';
+        SlotKey key = pools.get<Texture>().insert(std::move( Texture{
+            .name = path,
+            .allocation = allocation,
+            .image      = image,
+            .view       = view,
+            .sampler    = sampler,
+            .width      = textureMetaData.width,
+            .height     = textureMetaData.height,
+            .channels   = textureMetaData.channels,
+            .mipCount   = 1,
+        }));
+        
+        cache[std::type_index(typeid(Texture))][path] = key;
+
+        return std::move(ResourceHandle<Texture>(key));
+    }
+
+    template<>
+    inline const ResourceHandle<Texture> ResourceManager::load<Texture>(const std::string& sourceName, const Asset& asset, const size_t resourceIndex) {
+        return nullptr;
+    }
+
     template<>
     inline const ResourceHandle<Mesh> ResourceManager::load<Mesh>(const std::string& sourceName, const Asset& asset, const size_t resourceIndex) {
         auto& meshR = asset.meshes[resourceIndex];
@@ -86,8 +197,10 @@ namespace Engine {
                 if (colorIt)
                     color = fastgltf::getAccessorElement<glm::vec3>(asset, *colorAccessor, vertex);
                 
-                if (uv0It)
+                if (uv0It) {
                     uv0   = fastgltf::getAccessorElement<glm::vec2>(asset, *uv0Accessor, vertex);
+                    uv0.y *= -1;
+                }
 
                 vertices.emplace_back(pos, color, uv0);
             }
@@ -114,17 +227,19 @@ namespace Engine {
         GPUMemoryManager::getInstance().uploadDataToGPU(
                         mesh.vertexBuffer, mesh.vertexAllocation, 
                         vertices.data(), sizeof(vertices[0]) * vertices.size(), 
-                        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+                        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                        Core::getInstance().getGraphicsQueueIndex());
         
         if (indices.size() > 0) {
             GPUMemoryManager::getInstance().uploadDataToGPU(
                             mesh.indexBuffer, mesh.indexAllocation, 
                             indices.data(), sizeof(indices[0]) * indices.size(), 
-                            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+                            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+                            Core::getInstance().getGraphicsQueueIndex());
         }
 
         std::cout << "Registering mesh " << resourceName.c_str() << '\n';
-        SlotKey key = pools.get<Mesh>().insert(mesh);
+        SlotKey key = pools.get<Mesh>().insert(std::move(mesh));
         
         cache[std::type_index(typeid(Mesh))][resourceName] = key;
 
@@ -184,19 +299,20 @@ namespace Engine {
         }
 
         std::cout << "Registering scene " << resourceName.c_str() << '\n';
-        SlotKey key = pools.get<Scene>().insert(scene);
+        SlotKey key = pools.get<Scene>().insert(std::move(scene));
         
         cache[std::type_index(typeid(Scene))][resourceName] = key;
 
         return std::move(ResourceHandle<Scene>(key));
     }
 
-    inline const ResourceHandle<Model> ResourceManager::load(const std::string& path) {
+    template<>
+    inline const ResourceHandle<Model> ResourceManager::load<Model>(const std::string& path) {
         assert(findKeyByName(std::type_index(typeid(Model)), path) == nullptr);
 
         std::cout << "Loading model: " << path << '\n';
     
-        auto [parser, asset, fileName] = FileParser::openFile(path);
+        auto [parser, asset, fileName] = FileParser::openModelFile(path);
 
         Model model = {
             .name       = fileName.c_str(),
@@ -210,7 +326,7 @@ namespace Engine {
         }
 
         std::cout << "Registering model " << path << '\n';
-        SlotKey key = pools.get<Model>().insert(model);
+        SlotKey key = pools.get<Model>().insert(std::move(model));
         
         cache[std::type_index(typeid(Model))][model.name] = key;
 
@@ -233,6 +349,28 @@ namespace Engine {
         if (--pool.getSlot(key).refCount == 0) {
             std::cout << "Destroying " << pool[key].name << '\n';
             cache[std::type_index(typeid(Resource))].erase(pool[key].name);
+            pool.erase(key);
+        }
+    }
+
+    template <>
+    inline void ResourceManager::release<Texture>(const SlotKey& key, const PassKey<ResourceHandle<Texture>>&) {
+        auto& pool = pools.get<Texture>();
+        
+        assert(key.generations == pool.getSlot(key).generations);
+        
+        if (--pool.getSlot(key).refCount == 0) {
+            std::cout << "Freeing Texture GPU memory for " << pool[key].name << '\n';
+            
+            Texture texture = pool[key];
+            auto device = *Core::getInstance().getDevice();
+            
+            vkDestroySampler(device, texture.sampler, nullptr);
+            vkDestroyImageView(device, texture.view, nullptr);
+            GPUMemoryManager::getInstance().releaseBuffer(texture.image, texture.allocation);
+
+            std::cout << "Destroying Texture " << texture.name << '\n';
+            cache[std::type_index(typeid(Texture))].erase(texture.name);
             pool.erase(key);
         }
     }

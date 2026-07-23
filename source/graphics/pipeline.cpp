@@ -227,7 +227,7 @@ namespace Graphics {
             .rasterizerDiscardEnable    = vk::False,
             .polygonMode                = vk::PolygonMode::eFill,
             .cullMode                   = vk::CullModeFlagBits::eBack,
-            .frontFace                  = vk::FrontFace::eCounterClockwise,
+            .frontFace                  = vk::FrontFace::eClockwise,
             .depthBiasEnable            = vk::False,
             .lineWidth                  = 1.0f
         };

@@ -30,7 +30,7 @@ namespace Utils {
     SlotMap<T, Slot>::~SlotMap() {}
 
     template <typename T, typename Slot>
-    const SlotKey SlotMap<T, Slot>::insert(const T &value) {
+    const SlotKey SlotMap<T, Slot>::insert(const T &&value) {
         if (freeHead == ~0U) {
             if (allowReallocation)
                 reallocate();
@@ -43,7 +43,7 @@ namespace Utils {
 
         slot = { slotKey, slot.generations+1 };
         
-        data.push_back(value);
+        data.emplace_back(value);
         eraseTable.push_back(slotKey);
 
         return { slotKey, slot.generations };

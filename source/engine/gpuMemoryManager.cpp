@@ -60,18 +60,30 @@ namespace Engine {
         vmaCreateBuffer(allocator, &bufferInfo, &allocationCreateInfo, &stagingBuffer.buffer, &stagingBuffer.allocation, &stagingBuffer.allocInfo);
     }
 
+    void GPUMemoryManager::releaseBuffer(VkImage& image, VmaAllocation& allocation) {
+        vmaDestroyImage(allocator, image, allocation);
+    }
+
     void GPUMemoryManager::releaseBuffer(VkBuffer& buffer, VmaAllocation& allocation) {
         vmaDestroyBuffer(allocator, buffer, allocation);
     }
 
-    void GPUMemoryManager::allocateBuffer(VkBuffer& buffer, VmaAllocation& allocation, VkDeviceSize size, VkBufferUsageFlags usage) {
+    void GPUMemoryManager::allocateBuffer(VkImage& image, VmaAllocation& allocation, VkDeviceSize size, const VkImageCreateInfo& createInfo, uint32_t targetQueIndex) {
+        VmaAllocationCreateInfo allocationCreateInfo {
+            .usage = VMA_MEMORY_USAGE_AUTO
+        };
+
+        vmaCreateImage(allocator, &createInfo, &allocationCreateInfo, &image, &allocation, nullptr);
+    }
+
+    void GPUMemoryManager::allocateBuffer(VkBuffer& buffer, VmaAllocation& allocation, VkDeviceSize size, VkBufferUsageFlags usage, uint32_t targetQueueIndex) {
         VkBufferCreateInfo bufferInfo {
             .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
             .size  = size,
             .usage = usage
         };        
 
-        if (Graphics::Core::getInstance().hasDedicatedTransferQueue()) {
+        if (Graphics::Core::getInstance().hasDedicatedTransferQueue() && targetQueueIndex != Graphics::Core::getInstance().getTransferQueueIndex()) {
             std::array transferAndGraphicsQueues { 
                 Graphics::Core::getInstance().getGraphicsQueueIndex(),
                 Graphics::Core::getInstance().getTransferQueueIndex()
@@ -91,11 +103,82 @@ namespace Engine {
         vmaCreateBuffer(allocator, &bufferInfo, &allocationCreateInfo, &buffer, &allocation, &allocationInfo);
     }
 
-    void GPUMemoryManager::uploadDataToGPU(VkBuffer& buffer, VmaAllocation& allocation, const void* src, VkDeviceSize size, VkBufferUsageFlags usage) {
-        allocateBuffer(buffer, allocation, size, usage);
+    void GPUMemoryManager::uploadDataToGPU(VkImage& image, VmaAllocation& allocation, const void* src, VkDeviceSize size, const VkImageCreateInfo& createInfo, vk::ImageAspectFlagBits imageAspect, uint32_t targetQueueIndex) {
+        std::cout << "Uploading image to GPU" << '\n';
+
+        allocateBuffer(image, allocation, size, createInfo, targetQueueIndex);
+
+        vk::ImageMemoryBarrier2 barrier {
+            .srcStageMask           = vk::PipelineStageFlagBits2::eTransfer,    .srcAccessMask          = vk::AccessFlagBits2::eNone,
+            .dstStageMask           = vk::PipelineStageFlagBits2::eTransfer,    .dstAccessMask          = vk::AccessFlagBits2::eTransferWrite,
+            .oldLayout              = vk::ImageLayout::eUndefined,              .newLayout              = vk::ImageLayout::eTransferDstOptimal,
+            .srcQueueFamilyIndex    = vk::QueueFamilyIgnored,                   .dstQueueFamilyIndex    = vk::QueueFamilyIgnored,
+            .image                  = image,
+            .subresourceRange       = { .aspectMask = imageAspect, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1 }
+        };
+
+        vk::DependencyInfo dependencyInfo = {
+            .dependencyFlags         = {},
+            .imageMemoryBarrierCount = 1,
+            .pImageMemoryBarriers    = &barrier
+        };
+
+        std::cout << "Adding image barrier" << '\n';
+        CommandBuffer::singleTimeTransfer().addImageBarrier(dependencyInfo).submit();
+
+        vk::BufferImageCopy2 region {
+            .bufferOffset       = 0,
+            .bufferRowLength    = 0,
+            .bufferImageHeight  = 0,
+            .imageSubresource   = { .aspectMask = imageAspect, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = 1},
+            .imageOffset        = { 0, 0, 0 },
+            .imageExtent        = { createInfo.extent.width, createInfo.extent.height, createInfo.extent.depth }
+        };
+
+        vk::CopyBufferToImageInfo2 copyInfo {
+            .srcBuffer       = stagingBuffer.buffer,
+            .dstImage        = image,
+            .dstImageLayout  = vk::ImageLayout::eTransferDstOptimal,
+            .regionCount     = 1,
+            .pRegions        = &region
+        };
 
         VkDeviceSize written = 0;
+        while (written < size) {   
+            VkDeviceSize chunkSize = std::min(stagingBuffer.capacity, size - written);
+            
+            std::cout << "Transfering image... " << written << "/" << size << '\n';
 
+            memcpy(stagingBuffer.allocInfo.pMappedData, (const char*)src + written, size);
+
+            region.bufferOffset = written;
+            CommandBuffer::singleTimeTransfer().copyBufferToImage(copyInfo).submit();
+
+            written += chunkSize;
+            std::cout << "Transferred chunk: " << chunkSize << '\n';
+        }
+        
+        barrier.dstStageMask  = vk::PipelineStageFlagBits2::eFragmentShader;
+        barrier.dstAccessMask = vk::AccessFlagBits2::eShaderSampledRead;
+        barrier.newLayout     = vk::ImageLayout::eShaderReadOnlyOptimal;
+
+        if (Core::getInstance().getTransferQueueIndex() != targetQueueIndex) {
+            barrier.srcQueueFamilyIndex = Core::getInstance().getTransferQueueIndex();
+            barrier.dstQueueFamilyIndex = targetQueueIndex;
+
+            CommandBuffer::singleTimeTransfer().addImageBarrier(dependencyInfo).submit();
+        }
+
+        CommandBuffer::singleTimeGraphics().addImageBarrier(dependencyInfo).submit();     
+        
+        std::cout << "Finished image transfer!" << '\n';
+    }
+
+    void GPUMemoryManager::uploadDataToGPU(VkBuffer& buffer, VmaAllocation& allocation, const void* src, VkDeviceSize size, VkBufferUsageFlags usage, uint32_t targetQueueIndex) {
+        allocateBuffer(buffer, allocation, size, usage, targetQueueIndex);
+
+        VkDeviceSize written = 0;
+        
         while (written < size) {
             
             VkDeviceSize chunkSize = std::min(stagingBuffer.capacity, size - written);
