@@ -14,13 +14,12 @@ namespace Utils {
 
         data.reserve(allocationChunkSize);
         eraseTable.reserve(allocationChunkSize);
-        
-        slots.resize(allocationChunkSize);
+        slots.reserve(allocationChunkSize);
 
         for (uint32_t i = 0; i < allocationChunkSize-1U; i++) 
-            slots[i].index  = i+1U; // next available slot
+            slots.emplace_back( Slot { i+1U, 0 }); // next available slot
 
-        slots[allocationChunkSize-1U].index = ~0U;
+        slots.emplace_back( Slot { ~0U, 0 });
 
         freeHead              = 0;
         freeTail              = allocationChunkSize-1U;
@@ -30,7 +29,8 @@ namespace Utils {
     SlotMap<T, Slot>::~SlotMap() {}
 
     template <typename T, typename Slot>
-    const SlotKey SlotMap<T, Slot>::insert(const T &&value) {
+    template <typename... Args>
+    const SlotKey SlotMap<T, Slot>::emplace(Args&&... args) {
         if (freeHead == ~0U) {
             if (allowReallocation)
                 reallocate();
@@ -43,7 +43,7 @@ namespace Utils {
 
         slot = { slotKey, slot.generations+1 };
         
-        data.emplace_back(value);
+        data.emplace_back(std::forward<Args>(args)...);
         eraseTable.push_back(slotKey);
 
         return { slotKey, slot.generations };
@@ -83,9 +83,9 @@ namespace Utils {
         slots.reserve(newSize);
 
         for (uint32_t i = oldSize; i < newSize-1U; i++) 
-            slots.push_back( { i+1U, 0 } );
+            slots.emplace_back( Slot { i+1U, 0 } );
 
-        slots.push_back ( { ~0U, 0 } );
+        slots.emplace_back ( Slot { ~0U, 0 } );
 
         if (freeHead == ~0U) 
             freeHead = oldSize;   
@@ -133,13 +133,13 @@ namespace Utils {
     }
 
     template <typename T, typename Slot>
-    const T* SlotMap<T, Slot>::getRawData() const { return data.data(); }
+    const T* SlotMap<T, Slot>::getData() const { return data.data(); }
 
     template <typename T, typename Slot>
-    const size_t SlotMap<T, Slot>::getSize() const { return data.size(); }
+    const size_t SlotMap<T, Slot>::size() const { return data.size(); }
 
     template <typename T, typename Slot>
-    const size_t SlotMap<T, Slot>::getCapacity() const { return data.capacity(); }
+    const size_t SlotMap<T, Slot>::capacity() const { return data.capacity(); }
 
     template <typename T, typename Slot>
     const T& SlotMap<T, Slot>::operator[](const SlotKey& key) const {

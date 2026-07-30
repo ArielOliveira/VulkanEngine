@@ -2,7 +2,7 @@
 #define ENGINE_RESOURCE_MANAGER_TPP
 
 #include <engine/fileParser.hpp>
-#include <engine/gpuMemoryManager.hpp>
+#include <engine/gpuResourceManager.hpp>
 #include <engine/resourceManager.hpp>
 
 #include <graphics/core.hpp>
@@ -45,26 +45,20 @@ namespace Engine {
             .sharingMode   = VK_SHARING_MODE_EXCLUSIVE
         };
 
-        VkImage image;
-        VmaAllocation allocation;
-        GPUMemoryManager::getInstance().uploadDataToGPU(image, allocation, 
-                                          textureMetaData.data, textureMetaData.dataSize,
-                                          imageCreateInfo, 
-                                          vk::ImageAspectFlagBits::eColor,
-                                          Core::getInstance().getGraphicsQueueIndex());
-
-        VkImageViewCreateInfo viewInfo {
+        VkImageViewCreateInfo viewCreateInfo {
             .sType            = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-            .image            = image,
+            .image            = {},
             .viewType         = VkImageViewType::VK_IMAGE_VIEW_TYPE_2D,
             .format           = imageCreateInfo.format,
             .subresourceRange = {.aspectMask = VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1}
         };
         
-        auto& device     = *Core::getInstance().getDevice();
-        
-        VkImageView view;
-        vkCreateImageView(device, &viewInfo, nullptr, &view);
+        ResourceHandle<Image> imageHandle = createImage(
+            path, 
+            textureMetaData.data, textureMetaData.dataSize, 
+            imageCreateInfo, viewCreateInfo, 
+            textureMetaData.channels, 
+            Core::getInstance().getGraphicsQueueIndex());
         
         vk::PhysicalDeviceProperties properties = Core::getInstance().getPhysicalDevice().getProperties();
 
@@ -88,21 +82,14 @@ namespace Engine {
         };
 
         VkSampler sampler;
-        vkCreateSampler(device, &samplerInfo, nullptr, &sampler);
+        vkCreateSampler(*Core::getInstance().getDevice(), &samplerInfo, nullptr, &sampler);
 
         FileParser::closeTextureFile(handle);
 
         std::cout << "Registering texture " << path.c_str() << '\n';
-        SlotKey key = pools.get<Texture>().insert(std::move( Texture{
-            .name = path,
-            .allocation = allocation,
-            .image      = image,
-            .view       = view,
-            .sampler    = sampler,
-            .width      = textureMetaData.width,
-            .height     = textureMetaData.height,
-            .channels   = textureMetaData.channels,
-            .mipCount   = 1,
+        SlotKey key = pools.get<Texture>().emplace(std::move( Texture{
+            .image      = std::move(imageHandle),
+            .sampler    = sampler
         }));
         
         cache[std::type_index(typeid(Texture))][path] = key;
@@ -224,14 +211,14 @@ namespace Engine {
 
         std::cout << "Mesh " << resourceName << " has " << vertices.size() << "|" << mesh.vertexCount << " vertices" << '\n';
 
-        GPUMemoryManager::getInstance().uploadDataToGPU(
+        GPUResourceManager::getInstance().uploadData(
                         mesh.vertexBuffer, mesh.vertexAllocation, 
                         vertices.data(), sizeof(vertices[0]) * vertices.size(), 
                         VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
                         Core::getInstance().getGraphicsQueueIndex());
         
         if (indices.size() > 0) {
-            GPUMemoryManager::getInstance().uploadDataToGPU(
+            GPUResourceManager::getInstance().uploadData(
                             mesh.indexBuffer, mesh.indexAllocation, 
                             indices.data(), sizeof(indices[0]) * indices.size(), 
                             VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
@@ -239,7 +226,7 @@ namespace Engine {
         }
 
         std::cout << "Registering mesh " << resourceName.c_str() << '\n';
-        SlotKey key = pools.get<Mesh>().insert(std::move(mesh));
+        SlotKey key = pools.get<Mesh>().emplace(std::move(mesh));
         
         cache[std::type_index(typeid(Mesh))][resourceName] = key;
 
@@ -299,7 +286,7 @@ namespace Engine {
         }
 
         std::cout << "Registering scene " << resourceName.c_str() << '\n';
-        SlotKey key = pools.get<Scene>().insert(std::move(scene));
+        SlotKey key = pools.get<Scene>().emplace(std::move(scene));
         
         cache[std::type_index(typeid(Scene))][resourceName] = key;
 
@@ -326,7 +313,7 @@ namespace Engine {
         }
 
         std::cout << "Registering model " << path << '\n';
-        SlotKey key = pools.get<Model>().insert(std::move(model));
+        SlotKey key = pools.get<Model>().emplace(std::move(model));
         
         cache[std::type_index(typeid(Model))][model.name] = key;
 
@@ -353,6 +340,28 @@ namespace Engine {
         }
     }
 
+    template <> 
+    inline void ResourceManager::release<Image>(const SlotKey& key, const PassKey<ResourceHandle<Image>>&) {
+        auto& pool = pools.get<Image>();
+        
+        assert(key.generations == pool.getSlot(key).generations);
+        
+        if (--pool.getSlot(key).refCount == 0) {
+            std::cout << "Freeing Image GPU memory for " << pool[key].name << '\n';
+            
+            Image image = pool[key];
+            auto device = *Core::getInstance().getDevice();
+            
+            vkDestroyImageView(device, image.view, nullptr);
+            GPUResourceManager::getInstance().unregisterResourceState(key);
+            GPUResourceManager::getInstance().releaseBuffer(image.image, image.allocation);
+
+            std::cout << "Destroying Image " << image.name << '\n';
+            cache[std::type_index(typeid(Image))].erase(image.name);
+            pool.erase(key);
+        }
+    }
+
     template <>
     inline void ResourceManager::release<Texture>(const SlotKey& key, const PassKey<ResourceHandle<Texture>>&) {
         auto& pool = pools.get<Texture>();
@@ -360,17 +369,15 @@ namespace Engine {
         assert(key.generations == pool.getSlot(key).generations);
         
         if (--pool.getSlot(key).refCount == 0) {
-            std::cout << "Freeing Texture GPU memory for " << pool[key].name << '\n';
+            std::cout << "Freeing Texture " << pool[key].image.data().name << '\n';
             
             Texture texture = pool[key];
             auto device = *Core::getInstance().getDevice();
             
             vkDestroySampler(device, texture.sampler, nullptr);
-            vkDestroyImageView(device, texture.view, nullptr);
-            GPUMemoryManager::getInstance().releaseBuffer(texture.image, texture.allocation);
 
-            std::cout << "Destroying Texture " << texture.name << '\n';
-            cache[std::type_index(typeid(Texture))].erase(texture.name);
+            std::cout << "Destroying Texture " << texture.image.data().name << '\n';
+            cache[std::type_index(typeid(Texture))].erase(texture.image.data().name);
             pool.erase(key);
         }
     }
@@ -386,8 +393,8 @@ namespace Engine {
             
             Mesh m = pool[key];
 
-            GPUMemoryManager::getInstance().releaseBuffer(m.vertexBuffer, m.vertexAllocation);
-            GPUMemoryManager::getInstance().releaseBuffer(m.indexBuffer, m.indexAllocation);
+            GPUResourceManager::getInstance().releaseBuffer(m.vertexBuffer, m.vertexAllocation);
+            GPUResourceManager::getInstance().releaseBuffer(m.indexBuffer, m.indexAllocation);
 
             std::cout << "Destroying mesh " <<m.name << '\n';
             cache[std::type_index(typeid(Mesh))].erase(m.name);

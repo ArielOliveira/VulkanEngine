@@ -13,22 +13,19 @@
 #include <fastgltf/glm_element_traits.hpp>
 #include <fastgltf/types.hpp>
 
-#include <engine/resourceHandle.hpp>
 #include <engine/resources.hpp>
 
 #include <utils/slotmap.hpp>
 #include <utils/passKey.hpp>
 
-using Utils::SlotKey;
 using Utils::SlotMap;
-using Utils::ResourceSlot;
 using Utils::PassKey;
 
 using fastgltf::Asset;
 
-namespace Engine {
-    using namespace Engine::Resources;
+using namespace Engine::Resources;
 
+namespace Engine {
     class ResourceManager {
         public:
             static ResourceManager& getInstance();
@@ -40,6 +37,9 @@ namespace Engine {
             ResourceManager& operator=(ResourceManager&&) noexcept = delete;
 
             ~ResourceManager();
+
+            const ResourceHandle<Image> createImage(const std::string& name, const void* data, const VkDeviceSize size, const VkImageCreateInfo& imageCreateInfo, VkImageViewCreateInfo& viewCreateInfo, const uint32_t channels, const uint32_t targetQueue);
+            const ResourceHandle<Image> createImage(const std::string& name, const VkImageCreateInfo& imageCreateInfo, const VkImageViewCreateInfo& viewCreateInfo, const uint32_t channels, const uint32_t targetQueue); 
 
             template <typename Resource>
             const ResourceHandle<Resource> load(const std::string& path);
@@ -57,9 +57,9 @@ namespace Engine {
             const Resource& get(const SlotKey& key, const PassKey<ResourceHandle<Resource>>&) const;
         
         private:
-            template <typename... ResourceType>
+            template <typename... ResourceTypes>
             struct Pools {
-                std::tuple<SlotMap<ResourceType, ResourceSlot>...> pools;
+                std::tuple<SlotMap<ResourceTypes, ResourceSlot>...> pools;
 
                 template<typename T>
                 SlotMap<T, ResourceSlot>& get() {
@@ -72,7 +72,7 @@ namespace Engine {
                 }
             };
 
-            using ResourcesPool = Pools<Model, Scene, Mesh, Material, Shader, Texture, Animation>;
+            using ResourcesPool = Pools<Model, Scene, Mesh, Material, Shader, Texture, Image, Animation>;
 
             ResourceManager();
 

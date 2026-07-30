@@ -1,31 +1,32 @@
 #include <engine/gpuAllocator.hpp>
 #include <vk_mem_alloc.h>
 
-#include <engine/gpuMemoryManager.hpp>
+#include <engine/gpuResourceManager.hpp>
 
 #include <graphics/core.hpp>
 #include <graphics/commandBuffer.hpp>
 using Graphics::Core;
 using Graphics::CommandBuffer;
 
+
 namespace Engine {
-    GPUMemoryManager& GPUMemoryManager::getInstance() {
-        static GPUMemoryManager instance;
+    GPUResourceManager& GPUResourceManager::getInstance() {
+        static GPUResourceManager instance;
 
         return instance;
     }
 
-    GPUMemoryManager::GPUMemoryManager() {
+    GPUResourceManager::GPUResourceManager() {
         intializeAllocator();
         createStagingBuffer();
     }
 
-    GPUMemoryManager::~GPUMemoryManager() {
+    GPUResourceManager::~GPUResourceManager() {
         vmaDestroyBuffer(allocator, stagingBuffer.buffer, stagingBuffer.allocation);
         vmaDestroyAllocator(allocator);
     }
 
-    void GPUMemoryManager::intializeAllocator() {
+    void GPUResourceManager::intializeAllocator() {
         VmaVulkanFunctions vulkanFunctions {
             .vkGetInstanceProcAddr = &vkGetInstanceProcAddr,
             .vkGetDeviceProcAddr   = &vkGetDeviceProcAddr
@@ -43,7 +44,7 @@ namespace Engine {
         vmaCreateAllocator(&allocatorCreateInfo, &allocator);
     }
 
-    void GPUMemoryManager::createStagingBuffer() {
+    void GPUResourceManager::createStagingBuffer() {
         stagingBuffer.capacity = STAGING_BUFFER_SIZE;
 
         VkBufferCreateInfo bufferInfo {
@@ -60,15 +61,15 @@ namespace Engine {
         vmaCreateBuffer(allocator, &bufferInfo, &allocationCreateInfo, &stagingBuffer.buffer, &stagingBuffer.allocation, &stagingBuffer.allocInfo);
     }
 
-    void GPUMemoryManager::releaseBuffer(VkImage& image, VmaAllocation& allocation) {
+    void GPUResourceManager::releaseBuffer(VkImage& image, VmaAllocation& allocation) {
         vmaDestroyImage(allocator, image, allocation);
     }
 
-    void GPUMemoryManager::releaseBuffer(VkBuffer& buffer, VmaAllocation& allocation) {
+    void GPUResourceManager::releaseBuffer(VkBuffer& buffer, VmaAllocation& allocation) {
         vmaDestroyBuffer(allocator, buffer, allocation);
     }
 
-    void GPUMemoryManager::allocateBuffer(VkImage& image, VmaAllocation& allocation, VkDeviceSize size, const VkImageCreateInfo& createInfo, uint32_t targetQueIndex) {
+    void GPUResourceManager::allocateBuffer(VkImage& image, VmaAllocation& allocation, const VkDeviceSize size, const VkImageCreateInfo& createInfo, const uint32_t targetQueIndex) {
         VmaAllocationCreateInfo allocationCreateInfo {
             .usage = VMA_MEMORY_USAGE_AUTO
         };
@@ -76,7 +77,7 @@ namespace Engine {
         vmaCreateImage(allocator, &createInfo, &allocationCreateInfo, &image, &allocation, nullptr);
     }
 
-    void GPUMemoryManager::allocateBuffer(VkBuffer& buffer, VmaAllocation& allocation, VkDeviceSize size, VkBufferUsageFlags usage, uint32_t targetQueueIndex) {
+    void GPUResourceManager::allocateBuffer(VkBuffer& buffer, VmaAllocation& allocation, const VkDeviceSize size, const VkBufferUsageFlags usage, const uint32_t targetQueueIndex) {
         VkBufferCreateInfo bufferInfo {
             .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
             .size  = size,
@@ -103,9 +104,7 @@ namespace Engine {
         vmaCreateBuffer(allocator, &bufferInfo, &allocationCreateInfo, &buffer, &allocation, &allocationInfo);
     }
 
-    void GPUMemoryManager::uploadDataToGPU(VkImage& image, VmaAllocation& allocation, const void* src, VkDeviceSize size, const VkImageCreateInfo& createInfo, vk::ImageAspectFlagBits imageAspect, uint32_t targetQueueIndex) {
-        std::cout << "Uploading image to GPU" << '\n';
-
+    void GPUResourceManager::uploadData(VkImage& image, VmaAllocation& allocation, const void* src, const VkDeviceSize size, const VkImageCreateInfo& createInfo, const vk::ImageAspectFlagBits imageAspect, const uint32_t targetQueueIndex) {
         allocateBuffer(image, allocation, size, createInfo, targetQueueIndex);
 
         vk::ImageMemoryBarrier2 barrier {
@@ -123,7 +122,6 @@ namespace Engine {
             .pImageMemoryBarriers    = &barrier
         };
 
-        std::cout << "Adding image barrier" << '\n';
         CommandBuffer::singleTimeTransfer().addImageBarrier(dependencyInfo).submit();
 
         vk::BufferImageCopy2 region {
@@ -170,11 +168,9 @@ namespace Engine {
         }
 
         CommandBuffer::singleTimeGraphics().addImageBarrier(dependencyInfo).submit();     
-        
-        std::cout << "Finished image transfer!" << '\n';
     }
 
-    void GPUMemoryManager::uploadDataToGPU(VkBuffer& buffer, VmaAllocation& allocation, const void* src, VkDeviceSize size, VkBufferUsageFlags usage, uint32_t targetQueueIndex) {
+    void GPUResourceManager::uploadData(VkBuffer& buffer, VmaAllocation& allocation, const void* src, const VkDeviceSize size, const VkBufferUsageFlags usage, const uint32_t targetQueueIndex) {
         allocateBuffer(buffer, allocation, size, usage, targetQueueIndex);
 
         VkDeviceSize written = 0;
@@ -191,5 +187,17 @@ namespace Engine {
 
             written += chunkSize;
         }
+    }
+
+    void GPUResourceManager::updateResourceState(const SlotKey& key, const ImageState& state) {
+        imageStates[key] = state;
+    }
+
+    void GPUResourceManager::registerResourceState(const SlotKey& key, const ImageState& initialState) {
+        imageStates.emplace(key, std::move(initialState));
+    }
+
+    void GPUResourceManager::unregisterResourceState(const SlotKey& key) {
+        imageStates.erase(key);
     }
 }

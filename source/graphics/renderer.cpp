@@ -49,7 +49,7 @@ namespace Graphics {
         //graphicsPipeline.createSimpleGraphicsDescriptorSets(core.getDevice(), uniformBuffers);
 
         graphicsPipeline.createGraphicsDescriptorPool(core.getDevice());
-        graphicsPipeline.createGraphicsDescriptorSets(core.getDevice(), uniformBuffers, { modelTexture.data().sampler, modelTexture.data().view, vk::ImageLayout::eShaderReadOnlyOptimal });
+        graphicsPipeline.createGraphicsDescriptorSets(core.getDevice(), uniformBuffers, { modelTexture.data().sampler, modelTexture.data().image.data().view, vk::ImageLayout::eShaderReadOnlyOptimal });
 
         createSyncObjects();
     }

@@ -1,23 +1,16 @@
-#ifndef SLOT_MAP_HPP
-#define SLOT_MAP_HPP
+#ifndef UTILS_SLOT_MAP_HPP
+#define UTILS_SLOT_MAP_HPP
 
 #include <iostream>
 #include <vector>
 
+#include <utils/types.hpp>
+
 using std::vector;
 
+using namespace Utils::Types;
+
 namespace Utils {
-    struct SlotBase {
-        uint32_t index;
-        uint32_t generations;
-    };
-
-    struct ResourceSlot : SlotBase {
-        uint32_t refCount;
-    };
-
-    typedef SlotBase SlotKey;
-
     // Slot map implementation:
     // This implementation uses a free-list. Over time
     // insertion and allocation will happen at random indexes
@@ -27,16 +20,19 @@ namespace Utils {
     template <typename T, typename Slot = SlotBase>
     class SlotMap {
         public:
-            SlotMap(uint32_t allocationChunkSize = 8, bool allowReallocation = true);
+            static constexpr uint32_t MIN_ALLOCATION_CHUNK = 4;
+
+            SlotMap(uint32_t allocationChunkSize = MIN_ALLOCATION_CHUNK, bool allowReallocation = true);
             ~SlotMap();    
             
-            const SlotKey insert(const T &&value);
+            template <typename... Args>
+            const SlotKey emplace(Args&&... args);
             void erase(const SlotKey& key);
             
-            const T*     getRawData()  const;
+            const T*     getData()  const;
             
-            const size_t getSize()     const;
-            const size_t getCapacity() const;
+            const size_t size()     const;
+            const size_t capacity() const;
             
             Slot& getSlot(const SlotKey& key);
             const Slot& getSlot(const SlotKey& key) const;
@@ -52,8 +48,6 @@ namespace Utils {
             vector<uint32_t> eraseTable;
 
             bool allowReallocation;
-            
-            static constexpr uint32_t MIN_ALLOCATION_CHUNK = 2;
 
             const uint32_t pushFreeList() noexcept;
             void popFreeList(const uint32_t keyIndex)  noexcept;

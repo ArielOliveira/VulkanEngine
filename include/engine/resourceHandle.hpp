@@ -2,7 +2,6 @@
 #define ENGINE_RESOURCE_HANDLE
 
 #include <utils/slotmap.hpp>
-using Utils::SlotKey;
 
 namespace Engine {
     template <typename T>
@@ -20,10 +19,12 @@ namespace Engine {
             const ResourceHandle& operator=(const ResourceHandle& rhs) = delete;
             ResourceHandle& operator=(ResourceHandle&& rhs) noexcept;
 
+            const SlotKey& key() const noexcept;
+
             const T& data() const;
 
         private:
-            SlotKey key = { ~0U, ~0U };
+            SlotKey _key = { ~0U, ~0U };
     };
 }
 
