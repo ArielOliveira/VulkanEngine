@@ -31,9 +31,9 @@ namespace Engine::Resources {
     };
 
     struct ImageState {
-        VkImageLayout currentLayout;
-        VkPipelineStageFlags2 currentStage;
-        VkAccessFlags2 currentAccess;
+        std::vector<VkImageLayout>         currentLayout;
+        std::vector<VkPipelineStageFlags2> currentStage;
+        std::vector<VkAccessFlags2>        currentAccess;
         
         uint32_t currentQueueFamily;
     };
@@ -47,8 +47,6 @@ namespace Engine::Resources {
         VkImageView view;
 
         uint32_t width, height, channels, mipCount;
-
-        std::vector<ImageState> subResourceStates;
     };
 
     struct Texture {

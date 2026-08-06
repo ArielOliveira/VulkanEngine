@@ -69,7 +69,7 @@ namespace Engine {
         vmaDestroyBuffer(allocator, buffer, allocation);
     }
 
-    void GPUResourceManager::allocateBuffer(VkImage& image, VmaAllocation& allocation, const VkDeviceSize size, const VkImageCreateInfo& createInfo, const uint32_t targetQueIndex) {
+    void GPUResourceManager::allocateBuffer(VkImage& image, VmaAllocation& allocation, const VkImageCreateInfo& createInfo) {
         VmaAllocationCreateInfo allocationCreateInfo {
             .usage = VMA_MEMORY_USAGE_AUTO
         };
@@ -85,14 +85,14 @@ namespace Engine {
         };        
 
         if (Graphics::Core::getInstance().hasDedicatedTransferQueue() && targetQueueIndex != Graphics::Core::getInstance().getTransferQueueIndex()) {
-            std::array transferAndGraphicsQueues { 
-                Graphics::Core::getInstance().getGraphicsQueueIndex(),
+            std::array transferAndTargetQueue { 
+                targetQueueIndex,
                 Graphics::Core::getInstance().getTransferQueueIndex()
             };
 
             bufferInfo.sharingMode = VK_SHARING_MODE_CONCURRENT;
             bufferInfo.queueFamilyIndexCount = 2;
-            bufferInfo.pQueueFamilyIndices = &transferAndGraphicsQueues[0];
+            bufferInfo.pQueueFamilyIndices = &transferAndTargetQueue[0];
         }
 
         VmaAllocationCreateInfo allocationCreateInfo {
@@ -104,8 +104,12 @@ namespace Engine {
         vmaCreateBuffer(allocator, &bufferInfo, &allocationCreateInfo, &buffer, &allocation, &allocationInfo);
     }
 
-    void GPUResourceManager::uploadData(VkImage& image, VmaAllocation& allocation, const void* src, const VkDeviceSize size, const VkImageCreateInfo& createInfo, const vk::ImageAspectFlagBits imageAspect, const uint32_t targetQueueIndex) {
-        allocateBuffer(image, allocation, size, createInfo, targetQueueIndex);
+    void GPUResourceManager::uploadData(VkImage& image, VmaAllocation& allocation, const VkImageCreateInfo& createInfo, const uint32_t targetQueueIndex) {
+        allocateBuffer(image, allocation, createInfo);
+    }
+
+    void GPUResourceManager::uploadData(VkImage& image, VmaAllocation& allocation, const std::byte* src, const VkDeviceSize size, const ImageLayout& imageLayout, const VkImageCreateInfo& createInfo, const VkImageAspectFlags imageAspect, const uint32_t targetQueueIndex) {
+        allocateBuffer(image, allocation, createInfo);
 
         vk::ImageMemoryBarrier2 barrier {
             .srcStageMask           = vk::PipelineStageFlagBits2::eTransfer,    .srcAccessMask          = vk::AccessFlagBits2::eNone,
@@ -113,7 +117,7 @@ namespace Engine {
             .oldLayout              = vk::ImageLayout::eUndefined,              .newLayout              = vk::ImageLayout::eTransferDstOptimal,
             .srcQueueFamilyIndex    = vk::QueueFamilyIgnored,                   .dstQueueFamilyIndex    = vk::QueueFamilyIgnored,
             .image                  = image,
-            .subresourceRange       = { .aspectMask = imageAspect, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1 }
+            .subresourceRange       = { .aspectMask = static_cast<vk::ImageAspectFlags>(imageAspect), .baseMipLevel = 0, .levelCount = static_cast<uint32_t>(imageLayout.mips.size()), .baseArrayLayer = 0, .layerCount = imageLayout.layers }
         };
 
         vk::DependencyInfo dependencyInfo = {
@@ -128,9 +132,9 @@ namespace Engine {
             .bufferOffset       = 0,
             .bufferRowLength    = 0,
             .bufferImageHeight  = 0,
-            .imageSubresource   = { .aspectMask = imageAspect, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = 1},
+            .imageSubresource   = { .aspectMask = static_cast<vk::ImageAspectFlags>(imageAspect), .mipLevel = 0, .baseArrayLayer = 0, .layerCount = imageLayout.layers},
             .imageOffset        = { 0, 0, 0 },
-            .imageExtent        = { createInfo.extent.width, createInfo.extent.height, createInfo.extent.depth }
+            .imageExtent        = { imageLayout.mips[0].width, imageLayout.mips[0].height, imageLayout.mips[0].depth }
         };
 
         vk::CopyBufferToImageInfo2 copyInfo {
@@ -141,19 +145,32 @@ namespace Engine {
             .pRegions        = &region
         };
 
-        VkDeviceSize written = 0;
-        while (written < size) {   
-            VkDeviceSize chunkSize = std::min(stagingBuffer.capacity, size - written);
+        for (size_t i = 0; i < imageLayout.mips.size(); i++) {
+            auto mipLayout = imageLayout.mips[i];
+
+            region.imageSubresource.mipLevel = i;
             
-            std::cout << "Transfering image... " << written << "/" << size << '\n';
+            size_t storageRows   = (mipLayout.height + imageLayout.blockHeight - 1) / imageLayout.blockHeight;
+            
+            size_t rowsPerChunk  = std::max(1ULL, (static_cast<size_t>(stagingBuffer.capacity) / mipLayout.storageRowPitch));
+            size_t rowsWritten   = 0;
+            
+            while(rowsWritten < storageRows) {
+                size_t rowsToWrite = std::min(rowsPerChunk, storageRows - rowsWritten); 
+                size_t bytes       = (size_t)rowsToWrite * (size_t)mipLayout.storageRowPitch;   
 
-            memcpy(stagingBuffer.allocInfo.pMappedData, (const char*)src + written, size);
+                memcpy(stagingBuffer.allocInfo.pMappedData, (src + mipLayout.offset) + (bytes * rowsWritten), bytes);
 
-            region.bufferOffset = written;
-            CommandBuffer::singleTimeTransfer().copyBufferToImage(copyInfo).submit();
+                uint32_t currentY      = rowsWritten * imageLayout.blockHeight;
+                uint32_t rowsThisChunk = std::min(static_cast<uint32_t>(rowsToWrite) * imageLayout.blockHeight, mipLayout.height - currentY);
 
-            written += chunkSize;
-            std::cout << "Transferred chunk: " << chunkSize << '\n';
+                region.imageOffset.y = currentY;
+                region.setImageExtent({ mipLayout.width, rowsThisChunk, 1 });
+
+                CommandBuffer::singleTimeTransfer().copyBufferToImage(copyInfo).submit();
+
+                rowsWritten += rowsToWrite;
+            }
         }
         
         barrier.dstStageMask  = vk::PipelineStageFlagBits2::eFragmentShader;
@@ -170,18 +187,17 @@ namespace Engine {
         CommandBuffer::singleTimeGraphics().addImageBarrier(dependencyInfo).submit();     
     }
 
-    void GPUResourceManager::uploadData(VkBuffer& buffer, VmaAllocation& allocation, const void* src, const VkDeviceSize size, const VkBufferUsageFlags usage, const uint32_t targetQueueIndex) {
+    void GPUResourceManager::uploadData(VkBuffer& buffer, VmaAllocation& allocation, const std::byte* src, const VkDeviceSize size, const VkBufferUsageFlags usage, const uint32_t targetQueueIndex) {
         allocateBuffer(buffer, allocation, size, usage, targetQueueIndex);
 
         VkDeviceSize written = 0;
         
         while (written < size) {
-            
             VkDeviceSize chunkSize = std::min(stagingBuffer.capacity, size - written);
             
             std::cout << "Writting GPU memory: " << written << "/" << size << '\n';
 
-            memcpy(stagingBuffer.allocInfo.pMappedData, (const char*)src + written, (size_t)chunkSize);
+            memcpy(stagingBuffer.allocInfo.pMappedData, src + written, (size_t)chunkSize);
 
             CommandBuffer::singleTimeTransfer().copyBuffer(stagingBuffer.buffer, buffer, vk::BufferCopy(0, written, chunkSize)).submit();
 

@@ -10,9 +10,12 @@
 #include <utils/sparseset.hpp>
 
 #include <engine/resources.hpp>
+#include <engine/descriptors.hpp>
 
 using Utils::SparseSet;
 using Engine::Resources::ImageState;
+using Engine::Descriptors::ImageLayout;
+using Engine::Descriptors::ImageMipLayout;
 
 constexpr uint32_t STAGING_BUFFER_SIZE = 16 * 1024 * 1024;
 
@@ -29,9 +32,9 @@ namespace Engine {
 
             void releaseBuffer(VkImage& image, VmaAllocation& allocation);
             void releaseBuffer(VkBuffer& buffer, VmaAllocation& allocation);
-
-            void uploadData(VkImage& image, VmaAllocation& allocation, const void* src, const VkDeviceSize size, const VkImageCreateInfo& createInfo, const vk::ImageAspectFlagBits imageAspect, const uint32_t targetQueueIndex);
-            void uploadData(VkBuffer& buffer, VmaAllocation& allocation, const void* src, const VkDeviceSize size, const VkBufferUsageFlags usage, const uint32_t targetQueueIndex);
+            void uploadData(VkImage& image, VmaAllocation& allocation, const VkImageCreateInfo& createInfo, const uint32_t targetQueueIndex);
+            void uploadData(VkImage& image, VmaAllocation& allocation, const std::byte* src, const VkDeviceSize size, const ImageLayout& imageLayout,  const VkImageCreateInfo& createInfo, const VkImageAspectFlags imageAspect, const uint32_t targetQueueIndex);
+            void uploadData(VkBuffer& buffer, VmaAllocation& allocation, const std::byte* src, const VkDeviceSize size, const VkBufferUsageFlags usage, const uint32_t targetQueueIndex);
 
             void updateResourceState(const SlotKey& key, const ImageState& state);
             void registerResourceState(const SlotKey& key, const ImageState& initialState);
@@ -49,7 +52,7 @@ namespace Engine {
 
             void intializeAllocator();
             void createStagingBuffer();
-            void allocateBuffer(VkImage& image, VmaAllocation& allocation, const VkDeviceSize size, const VkImageCreateInfo& createInfo, const uint32_t targetQueueIndex);
+            void allocateBuffer(VkImage& image, VmaAllocation& allocation, const VkImageCreateInfo& createInfo);
             void allocateBuffer(VkBuffer& buffer, VmaAllocation& allocation, const VkDeviceSize size, const VkBufferUsageFlags usage, const uint32_t targetQueueIndex);
 
             GPUResourceManager();
@@ -58,6 +61,7 @@ namespace Engine {
             StagingBuffer stagingBuffer;
 
             SparseSet<ImageState> imageStates;
+            
     };
 }
 

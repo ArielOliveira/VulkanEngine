@@ -1,7 +1,6 @@
 #ifndef ENGINE_RESOURCE_MANAGER_TPP
 #define ENGINE_RESOURCE_MANAGER_TPP
 
-#include <engine/fileParser.hpp>
 #include <engine/gpuResourceManager.hpp>
 #include <engine/resourceManager.hpp>
 
@@ -17,47 +16,39 @@ namespace Engine {
 
         std::cout << "Loading texture " << path << '\n';
 
-        auto [textureMetaData, handle] = FileParser::openTextureFile(path);
+        auto [textureAsset, fileHandle] = FileParser::openTextureFile(path);
 
         std::cout << std::to_string((uint32_t)vk::Format::eR8G8B8Srgb) << "|" << std::to_string(VK_FORMAT_R8G8B8_SRGB) << '\n';
 
-        std::cout << "Components count " << std::to_string(textureMetaData.channels) << '\n';
+        std::cout << "Components count " << std::to_string(textureAsset.layout.channels) << '\n';
 
-        switch (textureMetaData.channels) {
+        switch (textureAsset.layout.channels) {
             case 3:
-            case 4:  textureMetaData.format = (uint32_t)vk::Format::eR8G8B8A8Srgb; break;
+            case 4:  textureAsset.layout.format = (uint32_t)vk::Format::eR8G8B8A8Srgb; break;
         }
 
-        VkImageType imageType = textureMetaData.depth > 1 ? VK_IMAGE_TYPE_3D : 
-                           std::min(textureMetaData.height, textureMetaData.width) > 1 ? 
+        VkImageType imageType = textureAsset.layout.mips[0].depth > 1 ? VK_IMAGE_TYPE_3D : 
+                           std::min(textureAsset.layout.mips[0].height, textureAsset.layout.mips[0].width) > 1 ? 
                            VK_IMAGE_TYPE_2D : VK_IMAGE_TYPE_1D;
 
         VkImageCreateInfo imageCreateInfo {
             .sType         =  VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
             .imageType     = imageType,
-            .format        = (VkFormat)textureMetaData.format,
-            .extent        = { textureMetaData.width, textureMetaData.height, textureMetaData.depth },
-            .mipLevels     = 1,
-            .arrayLayers   = 1,
+            .format        = (VkFormat)textureAsset.layout.format,
+            .extent        = { textureAsset.layout.mips[0].width, textureAsset.layout.mips[0].height, textureAsset.layout.mips[0].depth },
+            .mipLevels     = static_cast<uint32_t>(textureAsset.layout.mips.size()),
+            .arrayLayers   = textureAsset.layout.layers,
             .samples       = VK_SAMPLE_COUNT_1_BIT,
             .tiling        = VK_IMAGE_TILING_OPTIMAL,
             .usage         = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
             .sharingMode   = VK_SHARING_MODE_EXCLUSIVE
         };
-
-        VkImageViewCreateInfo viewCreateInfo {
-            .sType            = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-            .image            = {},
-            .viewType         = VkImageViewType::VK_IMAGE_VIEW_TYPE_2D,
-            .format           = imageCreateInfo.format,
-            .subresourceRange = {.aspectMask = VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1}
-        };
-        
+      
         ResourceHandle<Image> imageHandle = createImage(
             path, 
-            textureMetaData.data, textureMetaData.dataSize, 
-            imageCreateInfo, viewCreateInfo, 
-            textureMetaData.channels, 
+            textureAsset, 
+            imageCreateInfo, 
+            VK_IMAGE_ASPECT_COLOR_BIT,
             Core::getInstance().getGraphicsQueueIndex());
         
         vk::PhysicalDeviceProperties properties = Core::getInstance().getPhysicalDevice().getProperties();
@@ -84,7 +75,7 @@ namespace Engine {
         VkSampler sampler;
         vkCreateSampler(*Core::getInstance().getDevice(), &samplerInfo, nullptr, &sampler);
 
-        FileParser::closeTextureFile(handle);
+        FileParser::closeTextureFile(fileHandle);
 
         std::cout << "Registering texture " << path.c_str() << '\n';
         SlotKey key = pools.get<Texture>().emplace(std::move( Texture{
@@ -213,14 +204,14 @@ namespace Engine {
 
         GPUResourceManager::getInstance().uploadData(
                         mesh.vertexBuffer, mesh.vertexAllocation, 
-                        vertices.data(), sizeof(vertices[0]) * vertices.size(), 
+                        reinterpret_cast<std::byte*>(vertices.data()), sizeof(vertices[0]) * vertices.size(), 
                         VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
                         Core::getInstance().getGraphicsQueueIndex());
         
         if (indices.size() > 0) {
             GPUResourceManager::getInstance().uploadData(
                             mesh.indexBuffer, mesh.indexAllocation, 
-                            indices.data(), sizeof(indices[0]) * indices.size(), 
+                            reinterpret_cast<std::byte*>(indices.data()), sizeof(indices[0]) * indices.size(), 
                             VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
                             Core::getInstance().getGraphicsQueueIndex());
         }

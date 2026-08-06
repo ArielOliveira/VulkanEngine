@@ -23,6 +23,10 @@ project(VulkanEngine LANGUAGES C CXX VERSION 0.0.1.0)
 
 configure_file(${INCLUDE_DIR}/version.hpp.in ${PROJECT_BINARY_DIR}/version.hpp)
 
+if(WIN32)
+    list(APPEND CMAKE_PREFIX_PATH "C:/Program Files (x86)/VUL/")
+endif()
+
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/modules")
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/definitions")
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/shaders")
@@ -34,6 +38,7 @@ include(LibraryLinker)
 find_package(KTX CONFIG REQUIRED)
 find_package(fastgltf CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
+find_package(VulkanUtilityLibraries CONFIG REQUIRED)
 find_package(VulkanMemoryAllocator CONFIG REQUIRED)
 
 add_subdirectory(${LIB_DIR}/glfw)
@@ -45,6 +50,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     glfw 
     Vulkan::cppm 
     GPUOpen::VulkanMemoryAllocator 
+    Vulkan::UtilityHeaders
     glm::glm
     fastgltf::fastgltf
     KTX::ktx

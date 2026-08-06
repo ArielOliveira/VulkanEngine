@@ -13,6 +13,7 @@
 #include <fastgltf/glm_element_traits.hpp>
 #include <fastgltf/types.hpp>
 
+#include <engine/fileParser.hpp>
 #include <engine/resources.hpp>
 
 #include <utils/slotmap.hpp>
@@ -20,6 +21,8 @@
 
 using Utils::SlotMap;
 using Utils::PassKey;
+
+using Engine::Descriptors::TextureAsset;
 
 using fastgltf::Asset;
 
@@ -38,8 +41,10 @@ namespace Engine {
 
             ~ResourceManager();
 
-            const ResourceHandle<Image> createImage(const std::string& name, const void* data, const VkDeviceSize size, const VkImageCreateInfo& imageCreateInfo, VkImageViewCreateInfo& viewCreateInfo, const uint32_t channels, const uint32_t targetQueue);
-            const ResourceHandle<Image> createImage(const std::string& name, const VkImageCreateInfo& imageCreateInfo, const VkImageViewCreateInfo& viewCreateInfo, const uint32_t channels, const uint32_t targetQueue); 
+            const ResourceHandle<Image> createImage(const std::string& name, const TextureAsset& textureMetaData, const VkImageCreateInfo& imageCreateInfo, const VkImageAspectFlags imageAspect, const uint32_t targetQueue);
+            const ResourceHandle<Image> createImage(const std::string& name, const VkImageCreateInfo& imageCreateInfo, const VkImageAspectFlags imageAspect, const VkImageViewType viewType, const uint32_t mipCount, const uint32_t layers, const uint32_t channels, const uint32_t targetQueue); 
+            const ResourceHandle<Image> createDepthBuffer(const uint32_t width, const uint32_t height);
+            const ResourceHandle<Image> createColorResolveBuffer(const uint32_t width, const uint32_t height);
 
             template <typename Resource>
             const ResourceHandle<Resource> load(const std::string& path);

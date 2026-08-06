@@ -7,6 +7,8 @@
 #include <fastgltf/tools.hpp>
 #include <fastgltf/glm_element_traits.hpp>
 
+#include <vulkan/utility/vk_format_utils.h>
+
 #include <ktx.h>
 
 #include <runtime/fileHelper.hpp>
@@ -15,7 +17,8 @@
 #include <vector>
 #include <stack>
 
-using Engine::Descriptors::TextureMetaData;
+using Engine::Descriptors::ImageLayout;
+using Engine::Descriptors::ImageMipLayout;
 
 namespace Engine {
     const std::tuple<Parser, Expected<Asset>, std::string>  FileParser::openModelFile(const std::string& path) {
@@ -36,7 +39,7 @@ namespace Engine {
         return { std::move(parser), std::move(asset), systemPath.filename().string() };
     }
 
-    const std::pair<TextureMetaData, void*> FileParser::openTextureFile(const std::string& path) {
+    const std::pair<TextureAsset, void*> FileParser::openTextureFile(const std::string& path) {
         ktxTexture2* kTexture;
         KTX_error_code result = ktxTexture2_CreateFromNamedFile(
             path.c_str(),
@@ -46,24 +49,58 @@ namespace Engine {
 
         
         if (result != KTX_SUCCESS) 
-            throw std::runtime_error("Failed to load ktx texture image! " + std::to_string(result));
+            throw std::runtime_error("Failed to load ktx texture image! " + std::to_string(result));        
+
+        auto extent = vkuFormatTexelBlockExtent((VkFormat)kTexture->vkFormat);
         
-        return { std::move(TextureMetaData {
-            .width           = kTexture->baseWidth,
-            .height          = kTexture->baseHeight,
-            .depth           = kTexture->baseDepth,
-            .format          = kTexture->vkFormat,
-            .channels        = ktxTexture2_GetNumComponents(kTexture),
-            .dataSize        = kTexture->dataSize,
-            .generateMipmaps = kTexture->generateMipmaps,
-            .data            = kTexture->pData, }), 
-            (void*)kTexture 
+        ImageLayout layout {
+            .texelSize   = static_cast<uint32_t>(ktxTexture_GetElementSize((ktxTexture*)kTexture)),
+            .blockWidth  = extent.width,
+            .blockHeight = extent.height,
+            .blockDepth  = extent.depth,
+            .layers      = static_cast<uint32_t>(kTexture->numLayers),
+            .faces       = static_cast<uint32_t>(kTexture->numFaces),
+            .channels    = static_cast<uint32_t>(ktxTexture2_GetNumComponents(kTexture)),
+            .format      = static_cast<uint32_t>(kTexture->vkFormat),
         };
 
+        layout.mips.reserve(static_cast<uint32_t>(kTexture->numLevels));
+
+        uint32_t width  = kTexture->baseWidth;
+        uint32_t height = kTexture->baseHeight;
+        uint32_t depth  = kTexture->baseDepth;
+        size_t offset = 0;
         
+        assert(depth == 1 && "3D Texture currently not supported");
+
+        for (auto i = 0; i < kTexture->numLevels; i++) {
+            ktxTexture_GetImageOffset((ktxTexture*)kTexture, i, 0, 0, &offset);
+
+            layout.mips.emplace_back(
+                width, height, kTexture->baseDepth, 
+                static_cast<size_t>(ktxTexture_GetRowPitch((ktxTexture*)kTexture, i)),
+                static_cast<size_t>(offset),
+                static_cast<size_t>(ktxTexture_GetImageSize((ktxTexture*)kTexture, i)));
+            
+            width  >>= 1;
+            height >>= 1;
+        }
+
+        return { 
+            TextureAsset {
+                std::move(layout),
+                reinterpret_cast<std::byte*>(kTexture->pData),
+                kTexture->dataSize,
+                kTexture->generateMipmaps
+            },
+
+            reinterpret_cast<void*>(kTexture)
+        };
     }
 
     void FileParser::closeTextureFile(void* handle) {
-        ktxTexture_Destroy((ktxTexture*)handle);
+        assert(handle != nullptr && "Invalid texture file handle!");
+
+        ktxTexture2_Destroy(reinterpret_cast<ktxTexture2*>(handle));
     }
 }

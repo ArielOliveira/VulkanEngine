@@ -1,3 +1,4 @@
 {
-    "cmake.generator": "Ninja Multi-Config"
+    "cmake.generator": "Ninja Multi-Config",
+    "cmake.cmakePath": "C:/Program Files/CMake/bin/cmake.exe"
 }
