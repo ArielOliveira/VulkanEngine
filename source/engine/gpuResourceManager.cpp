@@ -4,9 +4,8 @@
 #include <engine/gpuResourceManager.hpp>
 
 #include <graphics/core.hpp>
-#include <graphics/commandBuffer.hpp>
+
 using Graphics::Core;
-using Graphics::CommandBuffer;
 
 
 namespace Engine {
@@ -77,38 +76,30 @@ namespace Engine {
         vmaCreateImage(allocator, &createInfo, &allocationCreateInfo, &image, &allocation, nullptr);
     }
 
-    void GPUResourceManager::allocateBuffer(VkBuffer& buffer, VmaAllocation& allocation, const VkDeviceSize size, const VkBufferUsageFlags usage, const uint32_t targetQueueIndex) {
-        VkBufferCreateInfo bufferInfo {
-            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .size  = size,
-            .usage = usage
-        };        
-
-        if (Graphics::Core::getInstance().hasDedicatedTransferQueue() && targetQueueIndex != Graphics::Core::getInstance().getTransferQueueIndex()) {
-            std::array transferAndTargetQueue { 
-                targetQueueIndex,
-                Graphics::Core::getInstance().getTransferQueueIndex()
-            };
-
-            bufferInfo.sharingMode = VK_SHARING_MODE_CONCURRENT;
-            bufferInfo.queueFamilyIndexCount = 2;
-            bufferInfo.pQueueFamilyIndices = &transferAndTargetQueue[0];
-        }
-
+    void GPUResourceManager::allocateBuffer(VkBuffer& buffer, VmaAllocation& allocation, const VkBufferCreateInfo& createInfo) {
         VmaAllocationCreateInfo allocationCreateInfo {
             .usage = VMA_MEMORY_USAGE_AUTO
         };
 
         VmaAllocationInfo allocationInfo;
 
-        vmaCreateBuffer(allocator, &bufferInfo, &allocationCreateInfo, &buffer, &allocation, &allocationInfo);
+        vmaCreateBuffer(allocator, &createInfo, &allocationCreateInfo, &buffer, &allocation, &allocationInfo);
     }
 
-    void GPUResourceManager::uploadData(VkImage& image, VmaAllocation& allocation, const VkImageCreateInfo& createInfo, const uint32_t targetQueueIndex) {
+    const ImageState GPUResourceManager::uploadData(VkImage& image, VmaAllocation& allocation, const VkImageCreateInfo& createInfo) {
         allocateBuffer(image, allocation, createInfo);
+
+        return {
+            std::vector<vk::PipelineStageFlags2>(createInfo.mipLevels, vk::PipelineStageFlagBits2::eTransfer),
+            std::vector<vk::AccessFlags2>(createInfo.mipLevels, vk::AccessFlagBits2::eTransferWrite),
+            std::vector<vk::ImageLayout>(createInfo.mipLevels, vk::ImageLayout::eTransferDstOptimal),
+            createInfo.sharingMode == VkSharingMode::VK_SHARING_MODE_CONCURRENT ? 
+                 VK_QUEUE_FAMILY_IGNORED :
+                 Core::getInstance().getTransferQueueIndex()
+        };
     }
 
-    void GPUResourceManager::uploadData(VkImage& image, VmaAllocation& allocation, const std::byte* src, const VkDeviceSize size, const ImageLayout& imageLayout, const VkImageCreateInfo& createInfo, const VkImageAspectFlags imageAspect, const uint32_t targetQueueIndex) {
+    const ImageState GPUResourceManager::uploadData(VkImage& image, VmaAllocation& allocation, const std::byte* src, const VkDeviceSize size, const ImageLayout& imageLayout, const VkImageCreateInfo& createInfo, const VkImageAspectFlags imageAspect) {
         allocateBuffer(image, allocation, createInfo);
 
         vk::ImageMemoryBarrier2 barrier {
@@ -172,8 +163,17 @@ namespace Engine {
                 rowsWritten += rowsToWrite;
             }
         }
+
+        return {
+            std::vector<vk::PipelineStageFlags2>(imageLayout.mips.size(), vk::PipelineStageFlagBits2::eTransfer),
+            std::vector<vk::AccessFlags2>(imageLayout.mips.size(), vk::AccessFlagBits2::eTransferWrite),
+            std::vector<vk::ImageLayout>(imageLayout.mips.size(), vk::ImageLayout::eTransferDstOptimal),
+            createInfo.sharingMode == VkSharingMode::VK_SHARING_MODE_CONCURRENT ? 
+                 VK_QUEUE_FAMILY_IGNORED :
+                 Core::getInstance().getTransferQueueIndex() 
+        };
         
-        barrier.dstStageMask  = vk::PipelineStageFlagBits2::eFragmentShader;
+      /*barrier.dstStageMask  = vk::PipelineStageFlagBits2::eFragmentShader;
         barrier.dstAccessMask = vk::AccessFlagBits2::eShaderSampledRead;
         barrier.newLayout     = vk::ImageLayout::eShaderReadOnlyOptimal;
 
@@ -184,18 +184,18 @@ namespace Engine {
             CommandBuffer::singleTimeTransfer().addImageBarrier(dependencyInfo).submit();
         }
 
-        CommandBuffer::singleTimeGraphics().addImageBarrier(dependencyInfo).submit();     
+        CommandBuffer::singleTimeGraphics().addImageBarrier(dependencyInfo).submit();*/
     }
 
-    void GPUResourceManager::uploadData(VkBuffer& buffer, VmaAllocation& allocation, const std::byte* src, const VkDeviceSize size, const VkBufferUsageFlags usage, const uint32_t targetQueueIndex) {
-        allocateBuffer(buffer, allocation, size, usage, targetQueueIndex);
+    const BufferState GPUResourceManager::uploadData(VkBuffer& buffer, VmaAllocation& allocation, const std::byte* src, const VkBufferCreateInfo& createInfo) {
+        allocateBuffer(buffer, allocation, createInfo);
 
         VkDeviceSize written = 0;
         
-        while (written < size) {
-            VkDeviceSize chunkSize = std::min(stagingBuffer.capacity, size - written);
+        while (written < createInfo.size) {
+            VkDeviceSize chunkSize = std::min(stagingBuffer.capacity, createInfo.size - written);
             
-            std::cout << "Writting GPU memory: " << written << "/" << size << '\n';
+            std::cout << "Writting GPU memory: " << written << "/" << createInfo.size << '\n';
 
             memcpy(stagingBuffer.allocInfo.pMappedData, src + written, (size_t)chunkSize);
 
@@ -203,17 +203,11 @@ namespace Engine {
 
             written += chunkSize;
         }
-    }
 
-    void GPUResourceManager::updateResourceState(const SlotKey& key, const ImageState& state) {
-        imageStates[key] = state;
-    }
-
-    void GPUResourceManager::registerResourceState(const SlotKey& key, const ImageState& initialState) {
-        imageStates.emplace(key, std::move(initialState));
-    }
-
-    void GPUResourceManager::unregisterResourceState(const SlotKey& key) {
-        imageStates.erase(key);
+        return { vk::PipelineStageFlagBits2::eTransfer, 
+                 vk::AccessFlagBits2::eTransferWrite,
+                 createInfo.sharingMode == VkSharingMode::VK_SHARING_MODE_CONCURRENT ? 
+                 VK_QUEUE_FAMILY_IGNORED :
+                 Core::getInstance().getTransferQueueIndex() };
     }
 }

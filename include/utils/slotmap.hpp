@@ -31,6 +31,8 @@ namespace Utils {
             
             const T*     getData()  const;
             
+            const bool   contains(const SlotKey& key) const;
+
             const size_t size()     const;
             const size_t capacity() const;
             
@@ -48,6 +50,8 @@ namespace Utils {
             vector<uint32_t> eraseTable;
 
             bool allowReallocation;
+
+            SlotHandler<Slot> slotHandler;
 
             const uint32_t pushFreeList() noexcept;
             void popFreeList(const uint32_t keyIndex)  noexcept;

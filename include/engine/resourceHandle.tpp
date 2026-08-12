@@ -28,6 +28,10 @@ namespace Engine {
 
     template <typename T>
     const ResourceHandle<T>& ResourceHandle<T>::operator=(std::nullptr_t) noexcept {
+        if (ResourceManager::getInstance().contains<T>(_key, {})) {
+            ResourceManager::getInstance().release<T>(_key, {});
+        }
+
         _key = { ~0U, ~0U };
     }
 
@@ -44,6 +48,11 @@ namespace Engine {
     template <typename T>
     const SlotKey& ResourceHandle<T>::key() const noexcept {
         return _key;
+    }
+
+    template <typename T>
+    const ResourceState& ResourceHandle<T>::state() const noexcept {
+        return ResourceManager::getInstance().getResourceState<T>(_key, {});
     }
 
     template <typename T>

@@ -41,10 +41,10 @@ namespace Engine {
 
             ~ResourceManager();
 
-            const ResourceHandle<Image> createImage(const std::string& name, const TextureAsset& textureMetaData, const VkImageCreateInfo& imageCreateInfo, const VkImageAspectFlags imageAspect, const uint32_t targetQueue);
-            const ResourceHandle<Image> createImage(const std::string& name, const VkImageCreateInfo& imageCreateInfo, const VkImageAspectFlags imageAspect, const VkImageViewType viewType, const uint32_t mipCount, const uint32_t layers, const uint32_t channels, const uint32_t targetQueue); 
-            const ResourceHandle<Image> createDepthBuffer(const uint32_t width, const uint32_t height);
-            const ResourceHandle<Image> createColorResolveBuffer(const uint32_t width, const uint32_t height);
+            const ResourceHandle<Image> createImage(const std::string& name, const TextureAsset& textureMetaData, const VkImageCreateInfo& imageCreateInfo, const VkImageAspectFlags imageAspect);
+            const ResourceHandle<Image> createImage(const std::string& name, const VkImageCreateInfo& imageCreateInfo, const VkImageAspectFlags imageAspect, const VkImageViewType viewType, const uint32_t mipCount, const uint32_t layers, const uint32_t channels); 
+            const ResourceHandle<Image> createDepthAttachment(const uint32_t width, const uint32_t height);
+            const ResourceHandle<Image> createColorResolveAttachment(const uint32_t width, const uint32_t height, VkFormat format);
 
             template <typename Resource>
             const ResourceHandle<Resource> load(const std::string& path);
@@ -59,7 +59,13 @@ namespace Engine {
             void release(const SlotKey& key, const PassKey<ResourceHandle<Resource>>&);
 
             template <typename Resource>
+            const bool contains(const SlotKey& key, const PassKey<ResourceHandle<Resource>>&) const;
+
+            template <typename Resource>
             const Resource& get(const SlotKey& key, const PassKey<ResourceHandle<Resource>>&) const;
+
+            template <typename Resource>
+            const ResourceState& getResourceState(const SlotKey& key, const PassKey<ResourceHandle<Resource>>&) const;
         
         private:
             template <typename... ResourceTypes>

@@ -38,15 +38,15 @@ namespace Utils {
                 return { ~0U, ~0U };
         }
         
-        uint32_t slotKey = pushFreeList();    
-        Slot& slot = slots[slotKey];
-
-        slot = { slotKey, slot.generations+1 };
+        uint32_t slotKey = pushFreeList();
+        
+        //Slot& slot = slots[slotKey];
+        //slot = { slotKey, slot.generations+1 };
         
         data.emplace_back(std::forward<Args>(args)...);
         eraseTable.push_back(slotKey);
 
-        return { slotKey, slot.generations };
+        return slotHandler.reinsert(slots[slotKey], slotKey);
     }
 
     template <typename T, typename Slot>
@@ -57,9 +57,11 @@ namespace Utils {
         if (key.generations != slots[key.index].generations)
             throw std::runtime_error("Invalid key! Possible use-after-free.");
 
-        Slot& slot = slots[key.index];
-        uint32_t dataIndex = slot.index;
-        slot.generations++;
+        uint32_t dataIndex = slotHandler.recycle(slots[key.index]).index;
+        
+        //Slot& slot = slots[key.index];
+        //uint32_t dataIndex = slot.index;
+        //slot.generations++;
 
         std::swap(data[dataIndex], data.back());
         std::swap(eraseTable[dataIndex], eraseTable.back());
@@ -130,6 +132,13 @@ namespace Utils {
         assert(key.generations == slots[key.index].generations);
 
         return slots[key.index]; 
+    }
+
+    template <typename T, typename Slot>
+    const bool SlotMap<T, Slot>::contains(const SlotKey& key) const {
+        return key.index >= 0 && 
+               key.index < slots.size() && 
+               slots[key.index].generations == key.generations;
     }
 
     template <typename T, typename Slot>

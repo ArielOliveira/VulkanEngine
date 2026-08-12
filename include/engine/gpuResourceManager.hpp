@@ -1,5 +1,5 @@
-#ifndef GPU_RESOURCE_MANAGER
-#define GPU_RESOURCE_MANAGER
+#ifndef ENGINE_GPU_RESOURCE_MANAGER_HPP
+#define ENGINE_GPU_RESOURCE_MANAGER_HPP
 
 #include <utility>
 
@@ -11,11 +11,14 @@
 
 #include <engine/resources.hpp>
 #include <engine/descriptors.hpp>
+#include <graphics/commandBuffer.hpp>
 
 using Utils::SparseSet;
-using Engine::Resources::ImageState;
+using namespace Engine::Resources;
 using Engine::Descriptors::ImageLayout;
 using Engine::Descriptors::ImageMipLayout;
+
+using Graphics::CommandBuffer;
 
 constexpr uint32_t STAGING_BUFFER_SIZE = 16 * 1024 * 1024;
 
@@ -32,12 +35,18 @@ namespace Engine {
 
             void releaseBuffer(VkImage& image, VmaAllocation& allocation);
             void releaseBuffer(VkBuffer& buffer, VmaAllocation& allocation);
-            void uploadData(VkImage& image, VmaAllocation& allocation, const VkImageCreateInfo& createInfo, const uint32_t targetQueueIndex);
-            void uploadData(VkImage& image, VmaAllocation& allocation, const std::byte* src, const VkDeviceSize size, const ImageLayout& imageLayout,  const VkImageCreateInfo& createInfo, const VkImageAspectFlags imageAspect, const uint32_t targetQueueIndex);
-            void uploadData(VkBuffer& buffer, VmaAllocation& allocation, const std::byte* src, const VkDeviceSize size, const VkBufferUsageFlags usage, const uint32_t targetQueueIndex);
+            const ImageState  uploadData(VkImage& image, VmaAllocation& allocation, const VkImageCreateInfo& createInfo);
+            const ImageState  uploadData(VkImage& image, VmaAllocation& allocation, const std::byte* src, const VkDeviceSize size, const ImageLayout& imageLayout,  const VkImageCreateInfo& createInfo, const VkImageAspectFlags imageAspect);
+            const BufferState uploadData(VkBuffer& buffer, VmaAllocation& allocation, const std::byte* src, const VkBufferCreateInfo& createInfo);
 
-            void updateResourceState(const SlotKey& key, const ImageState& state);
-            void registerResourceState(const SlotKey& key, const ImageState& initialState);
+            
+            template<typename ResourceType, typename ResourceState>
+            void updateResourceState(const ResourceHandle<ResourceType>& handle, const ResourceState& newState, const CommandBuffer& commandBuffer);
+            
+            template<typename ResourceState>
+            void registerResourceState(const SlotKey& key, const ResourceState& newState);
+
+            template<typename ResourceState>
             void unregisterResourceState(const SlotKey& key);
 
             ~GPUResourceManager();
@@ -53,16 +62,19 @@ namespace Engine {
             void intializeAllocator();
             void createStagingBuffer();
             void allocateBuffer(VkImage& image, VmaAllocation& allocation, const VkImageCreateInfo& createInfo);
-            void allocateBuffer(VkBuffer& buffer, VmaAllocation& allocation, const VkDeviceSize size, const VkBufferUsageFlags usage, const uint32_t targetQueueIndex);
+            void allocateBuffer(VkBuffer& buffer, VmaAllocation& allocation, const VkBufferCreateInfo& createInfo);
 
             GPUResourceManager();
 
             VmaAllocator allocator;
             StagingBuffer stagingBuffer;
 
-            SparseSet<ImageState> imageStates;
+            SparseSet<ImageState>  imageStates;
+            SparseSet<BufferState> bufferStates;
             
     };
 }
+
+#include <engine/gpuResourceManager.tpp>
 
 #endif

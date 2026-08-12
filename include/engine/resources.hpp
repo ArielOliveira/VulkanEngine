@@ -30,12 +30,19 @@ namespace Engine::Resources {
         std::string name;
     };
 
+    struct BufferState {
+        vk::PipelineStageFlags2 currentStage;
+        vk::AccessFlags2        currentAccess;
+
+        uint32_t currentQueueFamily = ~0U;
+    };
+
     struct ImageState {
-        std::vector<VkImageLayout>         currentLayout;
-        std::vector<VkPipelineStageFlags2> currentStage;
-        std::vector<VkAccessFlags2>        currentAccess;
+        std::vector<vk::PipelineStageFlags2> currentStage;
+        std::vector<vk::AccessFlags2>        currentAccess;
+        std::vector<vk::ImageLayout>         currentLayout;
         
-        uint32_t currentQueueFamily;
+        uint32_t currentQueueFamily = ~0U;
     };
 
     struct Image {
@@ -46,7 +53,9 @@ namespace Engine::Resources {
         VkImage     image;
         VkImageView view;
 
-        uint32_t width, height, channels, mipCount;
+        VkImageAspectFlags aspectFlags;
+
+        uint32_t width, height, channels, mipCount, layers;
     };
 
     struct Texture {
@@ -57,6 +66,9 @@ namespace Engine::Resources {
 
     struct Material {
         std::string name;
+
+        ResourceHandle<Texture> baseMap;
+        ResourceHandle<Texture> normalMap = nullptr;
     };
 
     struct Mesh {

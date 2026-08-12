@@ -20,6 +20,7 @@ namespace Engine {
             ResourceHandle& operator=(ResourceHandle&& rhs) noexcept;
 
             const SlotKey& key() const noexcept;
+            const ResourceState& state() const noexcept;
 
             const T& data() const;
 
