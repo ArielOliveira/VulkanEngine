@@ -90,12 +90,8 @@ namespace Engine {
         allocateBuffer(image, allocation, createInfo);
 
         return {
-            std::vector<vk::PipelineStageFlags2>(createInfo.mipLevels, vk::PipelineStageFlagBits2::eTransfer),
-            std::vector<vk::AccessFlags2>(createInfo.mipLevels, vk::AccessFlagBits2::eTransferWrite),
-            std::vector<vk::ImageLayout>(createInfo.mipLevels, vk::ImageLayout::eTransferDstOptimal),
-            createInfo.sharingMode == VkSharingMode::VK_SHARING_MODE_CONCURRENT ? 
-                 VK_QUEUE_FAMILY_IGNORED :
-                 Core::getInstance().getTransferQueueIndex()
+            make_state_array({}),
+            VK_QUEUE_FAMILY_IGNORED
         };
     }
 
@@ -117,7 +113,7 @@ namespace Engine {
             .pImageMemoryBarriers    = &barrier
         };
 
-        CommandBuffer::singleTimeTransfer().addImageBarrier(dependencyInfo).submit();
+        CommandBuffer::singleTimeTransfer().addBarrier(dependencyInfo).submit();
 
         vk::BufferImageCopy2 region {
             .bufferOffset       = 0,
@@ -165,26 +161,11 @@ namespace Engine {
         }
 
         return {
-            std::vector<vk::PipelineStageFlags2>(imageLayout.mips.size(), vk::PipelineStageFlagBits2::eTransfer),
-            std::vector<vk::AccessFlags2>(imageLayout.mips.size(), vk::AccessFlagBits2::eTransferWrite),
-            std::vector<vk::ImageLayout>(imageLayout.mips.size(), vk::ImageLayout::eTransferDstOptimal),
+            make_state_array({ vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal }),
             createInfo.sharingMode == VkSharingMode::VK_SHARING_MODE_CONCURRENT ? 
                  VK_QUEUE_FAMILY_IGNORED :
                  Core::getInstance().getTransferQueueIndex() 
         };
-        
-      /*barrier.dstStageMask  = vk::PipelineStageFlagBits2::eFragmentShader;
-        barrier.dstAccessMask = vk::AccessFlagBits2::eShaderSampledRead;
-        barrier.newLayout     = vk::ImageLayout::eShaderReadOnlyOptimal;
-
-        if (Core::getInstance().getTransferQueueIndex() != targetQueueIndex) {
-            barrier.srcQueueFamilyIndex = Core::getInstance().getTransferQueueIndex();
-            barrier.dstQueueFamilyIndex = targetQueueIndex;
-
-            CommandBuffer::singleTimeTransfer().addImageBarrier(dependencyInfo).submit();
-        }
-
-        CommandBuffer::singleTimeGraphics().addImageBarrier(dependencyInfo).submit();*/
     }
 
     const BufferState GPUResourceManager::uploadData(VkBuffer& buffer, VmaAllocation& allocation, const std::byte* src, const VkBufferCreateInfo& createInfo) {
@@ -209,5 +190,100 @@ namespace Engine {
                  createInfo.sharingMode == VkSharingMode::VK_SHARING_MODE_CONCURRENT ? 
                  VK_QUEUE_FAMILY_IGNORED :
                  Core::getInstance().getTransferQueueIndex() };
+    }
+
+    void GPUResourceManager::updateImageState(const SlotKey& key, const Image& image, const ImageState& newState, const CommandBuffer& commandBuffer, const uint32_t cbIdx) {
+        vk::ImageMemoryBarrier2 barrier {
+            .image                  = image.image,
+            .subresourceRange       = { .aspectMask = static_cast<vk::ImageAspectFlags>(image.aspectFlags), .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1 }
+        };
+
+        vk::DependencyInfo dependencyInfo = {
+            .dependencyFlags         = {},
+            .imageMemoryBarrierCount = 1,
+            .pImageMemoryBarriers    = &barrier
+        };
+
+        for (size_t i = 0; i < image.mipCount; i++) {
+            auto oldS         = imageStates[key].states[i];
+            auto newS         = newState.states[i];
+
+            barrier.srcStageMask  = oldS.stage;
+            barrier.dstStageMask  = newS.stage;
+
+            barrier.srcAccessMask = oldS.access;
+            barrier.dstAccessMask = newS.access;
+
+            barrier.oldLayout     = oldS.layout;
+            barrier.newLayout     = newS.layout;
+
+            barrier.subresourceRange.baseMipLevel = i;
+
+            commandBuffer.addBarrier(dependencyInfo, cbIdx);
+        }
+
+        imageStates[key] = std::move(newState); 
+    }
+    
+    void GPUResourceManager::updateBufferState(const SlotKey& key, const VkBuffer& buffer, const VkDeviceSize size, const VkDeviceSize offset, const BufferState& newState, const CommandBuffer& commandBuffer, const uint32_t cbIdx) {
+        vk::BufferMemoryBarrier2 barrier {
+            .srcStageMask = bufferStates[key].currentStage, .srcAccessMask = bufferStates[key].currentAccess,
+            .dstStageMask = newState.currentStage,          .dstAccessMask = newState.currentAccess,
+            .buffer = buffer, .offset = offset, .size = size
+        };
+
+        vk::DependencyInfo dependencyInfo {
+            .dependencyFlags          = {},
+            .bufferMemoryBarrierCount = 1,
+            .pBufferMemoryBarriers    = &barrier
+        };
+
+        commandBuffer.addBarrier(dependencyInfo, cbIdx);
+    }
+    
+    void GPUResourceManager::transferImageQueueFamily(const SlotKey& key, const Image& image, const ImageState& newState, const CommandBuffer& src, const CommandBuffer& dst, const uint32_t srcIdx, const uint32_t dstIdx) {
+        vk::ImageMemoryBarrier2 barrier {
+            .image                  = image.image,
+            .subresourceRange       = { .aspectMask = static_cast<vk::ImageAspectFlags>(image.aspectFlags), .baseMipLevel = 0, .levelCount = image.mipCount, .baseArrayLayer = 0, .layerCount = image.layers }
+        };
+
+        vk::DependencyInfo dependencyInfo = {
+            .dependencyFlags         = {},
+            .imageMemoryBarrierCount = 1,
+            .pImageMemoryBarriers    = &barrier
+        };
+
+        if (imageStates[key].currentQueueFamily != newState.currentQueueFamily) {
+            barrier.subresourceRange.levelCount = image.mipCount;
+            barrier.subresourceRange.layerCount = image.layers;
+
+            barrier.srcStageMask  = imageStates[key].states[0].stage;
+            barrier.dstStageMask  = imageStates[key].states[0].stage;
+
+            barrier.srcAccessMask = imageStates[key].states[0].access;
+            barrier.dstAccessMask = imageStates[key].states[0].access;
+
+            src.addBarrier(dependencyInfo, srcIdx).submit(srcIdx);
+        }
+
+        dst.addBarrier(dependencyInfo, dstIdx).submit(dstIdx);
+    }
+    
+    void GPUResourceManager::transferBufferQueueFamily(const SlotKey& key, const VkBuffer& buffer, const VkDeviceSize size, const VkDeviceSize offset, const BufferState& newState, const CommandBuffer& src, const CommandBuffer& dst, const uint32_t srcIdx, const uint32_t dstIdx) {
+        vk::BufferMemoryBarrier2 barrier {
+            .srcStageMask = bufferStates[key].currentStage, .srcAccessMask = bufferStates[key].currentAccess,
+            .dstStageMask = bufferStates[key].currentStage, .dstAccessMask = bufferStates[key].currentAccess,
+            .srcQueueFamilyIndex = bufferStates[key].currentQueueFamily, .dstQueueFamilyIndex = newState.currentQueueFamily,
+            .buffer = buffer, .offset = offset, .size = size
+        };
+
+        vk::DependencyInfo dependencyInfo {
+            .dependencyFlags          = {},
+            .bufferMemoryBarrierCount = 1,
+            .pBufferMemoryBarriers    = &barrier
+        };
+
+        src.addBarrier(dependencyInfo, srcIdx).submit(srcIdx);
+        dst.addBarrier(dependencyInfo, dstIdx).submit(dstIdx);
     }
 }

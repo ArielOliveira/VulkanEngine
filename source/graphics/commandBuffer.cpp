@@ -60,7 +60,7 @@ namespace Graphics {
         return commands[index];
     }
 
-    const CommandBuffer& CommandBuffer::addImageBarrier(const vk::DependencyInfo& info, uint32_t index) const { commands[index].pipelineBarrier2(info); return *this; }
+    const CommandBuffer& CommandBuffer::addBarrier(const vk::DependencyInfo& info, uint32_t index) const { commands[index].pipelineBarrier2(info); return *this; }
     const CommandBuffer& CommandBuffer::blit(const vk::BlitImageInfo2& info, uint32_t index) const { commands[index].blitImage2(info); return *this; }
     const CommandBuffer& CommandBuffer::copyBuffer(vk::raii::Buffer &src, vk::raii::Buffer &dst, vk::DeviceSize size, uint32_t index) const { commands[index].copyBuffer(src, dst, vk::BufferCopy(0, 0, size)); return *this; }
     const CommandBuffer& CommandBuffer::copyBuffer(vk::raii::Buffer &src, vk::raii::Buffer &dst, vk::BufferCopy info, uint32_t index) const { commands[index].copyBuffer(src,dst, info); return *this; }

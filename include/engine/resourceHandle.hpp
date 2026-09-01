@@ -23,9 +23,14 @@ namespace Engine {
             const ResourceState& state() const noexcept;
 
             const T& data() const;
+            
+            template <typename... Args>
+            void recreate(Args&&... args);
 
         private:
-            SlotKey _key = { ~0U, ~0U };
+            static constexpr SlotKey null_key = { ~0U, ~0U };
+
+            SlotKey m_key = null_key;
     };
 }
 

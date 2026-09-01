@@ -30,21 +30,6 @@ namespace Engine::Resources {
         std::string name;
     };
 
-    struct BufferState {
-        vk::PipelineStageFlags2 currentStage;
-        vk::AccessFlags2        currentAccess;
-
-        uint32_t currentQueueFamily = ~0U;
-    };
-
-    struct ImageState {
-        std::vector<vk::PipelineStageFlags2> currentStage;
-        std::vector<vk::AccessFlags2>        currentAccess;
-        std::vector<vk::ImageLayout>         currentLayout;
-        
-        uint32_t currentQueueFamily = ~0U;
-    };
-
     struct Image {
         std::string name;
 
@@ -55,10 +40,14 @@ namespace Engine::Resources {
 
         VkImageAspectFlags aspectFlags;
 
-        uint32_t width, height, channels, mipCount, layers;
+        uint32_t width, height, depth, channels, mipCount, layers;
+
+        uint8_t managed = 1;
     };
 
     struct Texture {
+        std::string name;
+
         ResourceHandle<Image> image;
 
         VkSampler sampler;
@@ -79,6 +68,9 @@ namespace Engine::Resources {
 
         VkBuffer vertexBuffer;
         VkBuffer indexBuffer;
+
+        VkDeviceSize vtxBufferSize;
+        VkDeviceSize idxBufferSize;
         
         vk::IndexType indexType;
 
@@ -108,6 +100,40 @@ namespace Engine::Resources {
         
         vector<ResourceHandle<Scene>> scenes;
     };
+}
+
+namespace Engine::Resources::Trackers {
+    constexpr uint8_t MAX_MIP_COUNT = 16;
+
+    struct BufferState {
+        vk::PipelineStageFlags2 currentStage;
+        vk::AccessFlags2        currentAccess;
+
+        uint32_t currentQueueFamily = ~0U;
+    };
+
+    struct MipSyncState {
+        vk::PipelineStageFlags2 stage  = vk::PipelineStageFlagBits2::eNone;
+        vk::AccessFlags2        access = vk::AccessFlagBits2::eNone;
+        vk::ImageLayout         layout = vk::ImageLayout::eUndefined;
+    };
+
+    // Instead of a vector use a array maxed to
+    // maybe 16 indices or use a small vector library
+    struct ImageState {
+        std::array<MipSyncState, MAX_MIP_COUNT> states;
+        
+        uint32_t currentQueueFamily = VK_QUEUE_FAMILY_IGNORED;
+    };
+
+    constexpr std::array<MipSyncState, MAX_MIP_COUNT> make_state_array(const MipSyncState& value) {
+        std::array<MipSyncState, MAX_MIP_COUNT> stateArr{};
+
+        for (int i = 0; i < MAX_MIP_COUNT; i++)
+            stateArr[i] = value;
+        
+        return stateArr;
+    }
 }
 
 #endif

@@ -5,52 +5,55 @@
 
 namespace Engine {
     template<>
-    inline void GPUResourceManager::updateResourceState<Image, ImageState>(const ResourceHandle<Image>& handle, const ImageState& newState, const CommandBuffer& commandBuffer) { 
-        assert(imageStates.contains(handle.key()));
+    inline void GPUResourceManager::transferResourceQueueFamily<Mesh, BufferState>(const ResourceHandle<Mesh>& handle, const BufferState& newState, const CommandBuffer& src, const CommandBuffer& dst, const uint32_t srcIdx, const uint32_t dstIdx) {
+        assert(bufferStates.contains(handle.key()));
+        assert(bufferStates[handle.key()].currentQueueFamily != VK_QUEUE_FAMILY_IGNORED &&
+               newState.currentQueueFamily                   != VK_QUEUE_FAMILY_IGNORED &&
+               bufferStates[handle.key()].currentQueueFamily != newState.currentQueueFamily);
 
-        vk::ImageMemoryBarrier2 barrier {
-            .image                  = handle.data().image,
-            .subresourceRange       = { .aspectMask = static_cast<vk::ImageAspectFlags>(handle.data().aspectFlags), .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1 }
-        };
-
-        vk::DependencyInfo dependencyInfo = {
-            .dependencyFlags         = {},
-            .imageMemoryBarrierCount = 1,
-            .pImageMemoryBarriers    = &barrier
-        };
-
-        if (imageStates[handle.key()].currentQueueFamily != newState.currentQueueFamily) {
-            barrier.subresourceRange.levelCount = handle.data().mipCount;
-            barrier.subresourceRange.layerCount = handle.data().layers;
-
-            barrier.srcStageMask  = imageStates[handle.key()].currentStage[0];
-            barrier.dstStageMask  = imageStates[handle.key()].currentStage[0];
-
-            barrier.srcAccessMask = imageStates[handle.key()].currentAccess[0];
-            barrier.dstAccessMask = imageStates[handle.key()].currentAccess[0];
-
-            
-        }
-
-        barrier.subresourceRange.levelCount = 1;
-        barrier.subresourceRange.layerCount = 1;
-
-        for (size_t i = 0; i < handle.data().mipCount; i++) {
-            barrier.srcStageMask  = imageStates[handle.key()].currentStage[i];
-            barrier.dstStageMask  = newState.currentStage[i];
-
-            barrier.srcAccessMask = imageStates[handle.key()].currentAccess[i];
-            barrier.dstAccessMask = newState.currentAccess[i];
-        }
-        
-        imageStates[handle.key()] = std::move(newState); 
+        transferBufferQueueFamily(handle.key(), handle.data().vertexBuffer, handle.data().vtxBufferSize, 0, newState, src, dst, srcIdx, dstIdx);
+        if (handle.data().indexCount > 0)
+            transferBufferQueueFamily(handle.key(), handle.data().indexBuffer, handle.data().idxBufferSize, 0, newState, src, dst, srcIdx, dstIdx);
     }
 
     template<>
-    inline void GPUResourceManager::updateResourceState<Mesh, BufferState>(const ResourceHandle<Mesh>& handle, const BufferState& newState, const CommandBuffer& commandBuffer) { 
+    inline void GPUResourceManager::transferResourceQueueFamily<Image, ImageState>(const ResourceHandle<Image>& handle, const ImageState& newState, const CommandBuffer& src, const CommandBuffer& dst, const uint32_t srcIdx, const uint32_t dstIdx) {
+        assert(imageStates.contains(handle.key()));
+        assert(imageStates[handle.key()].currentQueueFamily != VK_QUEUE_FAMILY_IGNORED &&
+               newState.currentQueueFamily                  != VK_QUEUE_FAMILY_IGNORED &&
+               imageStates[handle.key()].currentQueueFamily != newState.currentQueueFamily);
+
+        transferImageQueueFamily(handle.key(), handle.data(), newState, src, dst, srcIdx, dstIdx);
+    }
+
+    template<>
+    inline void GPUResourceManager::updateResourceState<Image, ImageState>(const ResourceHandle<Image>& handle, const ImageState& newState, const CommandBuffer& commandBuffer, const uint32_t cbIdx) { 
+        assert(imageStates.contains(handle.key()));
+
+        updateImageState(handle.key(), handle.data(), newState, commandBuffer, cbIdx);
+    }
+
+    template<>
+    inline void GPUResourceManager::updateResourceState<Mesh, BufferState>(const ResourceHandle<Mesh>& handle, const BufferState& newState, const CommandBuffer& commandBuffer, const uint32_t cbIdx) { 
         assert(bufferStates.contains(handle.key()));
 
-        bufferStates[handle.key()] = std::move(newState); 
+        updateBufferState(handle.key(), handle.data().vertexBuffer, handle.data().vtxBufferSize, 0, newState, commandBuffer, cbIdx);
+        if (handle.data().indexCount > 0)
+            updateBufferState(handle.key(), handle.data().indexBuffer, handle.data().idxBufferSize, 0, newState, commandBuffer, cbIdx);
+    }
+
+    template<>
+    inline void GPUResourceManager::updateResourceState<Image, ImageState>(const ResourceHandle<Image>& handle, const ImageState& newState) {
+        assert(imageStates.contains(handle.key()));
+
+        imageStates[handle.key()] = std::move(newState);
+    }
+
+    template<>
+    inline void GPUResourceManager::updateResourceState<Mesh, BufferState>(const ResourceHandle<Mesh>& handle, const BufferState& newState) {
+        assert(bufferStates.contains(handle.key()));
+
+        bufferStates[handle.key()] = std::move(newState);
     }
 
     template<>

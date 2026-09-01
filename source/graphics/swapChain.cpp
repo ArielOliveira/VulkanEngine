@@ -1,5 +1,9 @@
 #include <graphics/swapChain.hpp>
 
+#include <engine/resourceEngine.hpp>
+
+using Engine::ResourceManager;
+
 namespace Graphics {
     SwapChain::SwapChain(const vk::raii::SurfaceKHR& surface, const vk::raii::PhysicalDevice &physicalDevice, const vk::raii::Device &device) {
         buildSwapChain(surface, physicalDevice, device);
@@ -37,22 +41,21 @@ namespace Graphics {
         };
 
         swapChain       = vk::raii::SwapchainKHR(device, swapChainCreateInfo);
-        swapChainImages = swapChain.getImages();
+        vector<vk::Image> swapChainImages = swapChain.getImages();
 
-        // Create Image Views
-        assert(swapChainImageViews.empty());
+        // Register images to resource manager
+        assert(images.empty());
 
-        vk::ImageViewCreateInfo imageViewCreateInfo {
-            .viewType         = vk::ImageViewType::e2D,
-            .format           = swapChainSurfaceFormat.format,
-            .components       = { vk::ComponentSwizzle::eIdentity, vk::ComponentSwizzle::eIdentity, vk::ComponentSwizzle::eIdentity, vk::ComponentSwizzle::eIdentity },
-            .subresourceRange = { .aspectMask = vk::ImageAspectFlagBits::eColor, .levelCount = 1, .layerCount = 1 }
-        };
-
-        swapChainImageViews.reserve(swapChainImages.size());
+        images.reserve(swapChainImages.size());
+        uint32_t imageId = 0;
         for (auto &image : swapChainImages) {
-            imageViewCreateInfo.image = image;
-            swapChainImageViews.emplace_back(device, imageViewCreateInfo);
+            images.emplace_back(std::move(ResourceManager::getInstance().registerExternal(
+                std::string("swapChain#" + std::to_string(imageId++)),
+                static_cast<VkImage>(image),
+                VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT,
+                static_cast<VkFormat>(swapChainSurfaceFormat.format),
+                swapChainExtent.width, swapChainExtent.height, 1U
+            )));
         }
     }
 
@@ -69,9 +72,8 @@ namespace Graphics {
     }
 
     void SwapChain::cleanUp() {
+        images.clear();
         swapChain.clear();
-        swapChainImages.clear();
-        swapChainImageViews.clear();
         swapChain = nullptr;
     }
 
@@ -123,20 +125,13 @@ namespace Graphics {
     const vk::raii::SwapchainKHR& SwapChain::getInstance() const & { return swapChain; }
     const vk::SurfaceFormatKHR& SwapChain::getSurfaceFormat() const { return swapChainSurfaceFormat; }
     const vk::Extent2D& SwapChain::getExtent() const { return swapChainExtent; }
-    const size_t SwapChain::getImageCount() const { return swapChainImages.size(); }
+    const size_t SwapChain::getImageCount() const { return images.size(); }
 
-    const vk::Image& SwapChain::getImage(uint32_t index) const {
-        if (index < 0 || index > swapChainImages.size()-1)
+    const ResourceHandle<Image>& SwapChain::getImage(uint32_t index) const {
+        if (index < 0 || index > images.size()-1)
             throw std::runtime_error("Invalid Swapchain image index!");
 
-        return swapChainImages[index];
-    }
-
-    const vk::raii::ImageView& SwapChain::getImageView(uint32_t index) const {
-        if (index < 0 || index > swapChainImageViews.size()-1)
-            throw std::runtime_error("Invalid Swapchain image index!");
-
-        return swapChainImageViews[index];
+        return images[index];
     }
 
     const vk::ResultValue<uint32_t> SwapChain::acquireNextImage(uint64_t timeout, const vk::raii::Semaphore &semaphore, const vk::raii::Fence &fence) const { return swapChain.acquireNextImage(timeout, semaphore, fence); }

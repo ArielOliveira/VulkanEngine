@@ -69,12 +69,14 @@ namespace Engine {
         FileParser::closeTextureFile(fileHandle);
 
         std::cout << "Registering texture " << path.c_str() << '\n';
+        std::string resourceName = path + "#" + "texture";
         SlotKey key = pools.get<Texture>().emplace(std::move( Texture{
+            .name       = resourceName,
             .image      = std::move(imageHandle),
             .sampler    = sampler
         }));
         
-        cache[std::type_index(typeid(Texture))][path] = key;
+        cache[std::type_index(typeid(Texture))][resourceName] = key;
 
         return std::move(ResourceHandle<Texture>(key));
     }
@@ -191,11 +193,14 @@ namespace Engine {
             vertexOffset += vertices.size();
         }
 
+        mesh.vtxBufferSize = sizeof(vertices[0]) * vertices.size();
+        mesh.idxBufferSize = sizeof(indices[0])  * indices.size();
+
         std::cout << "Mesh " << resourceName << " has " << vertices.size() << "|" << mesh.vertexCount << " vertices" << '\n';
 
         VkBufferCreateInfo createInfo {
             .sType        = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .size         = (sizeof(vertices[0]) * vertices.size()),
+            .size         = mesh.vtxBufferSize,
             .usage        = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
             .sharingMode  = VK_SHARING_MODE_EXCLUSIVE
         };
@@ -206,7 +211,7 @@ namespace Engine {
                         createInfo);
         
         if (indices.size() > 0) {
-            createInfo.size  = sizeof(indices[0]) * indices.size();
+            createInfo.size  = mesh.idxBufferSize;
             createInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
 
             GPUResourceManager::getInstance().uploadData(
@@ -343,13 +348,15 @@ namespace Engine {
 
             std::cout << "Freeing Image GPU memory for " << pool[key].name << '\n';
             
-            Image image = pool[key];
+            Image& image = pool[key];
             auto device = *Core::getInstance().getDevice();
             
             vkDestroyImageView(device, image.view, nullptr);
             GPUResourceManager::getInstance().unregisterResourceState<ImageState>(key);
-            GPUResourceManager::getInstance().releaseBuffer(image.image, image.allocation);
 
+            if (image.managed)
+                GPUResourceManager::getInstance().releaseBuffer(image.image, image.allocation);
+            
             std::cout << "Destroying Image " << image.name << '\n';
             cache[std::type_index(typeid(Image))].erase(image.name);
             pool.erase(key);
@@ -367,13 +374,13 @@ namespace Engine {
 
             std::cout << "Freeing Texture " << pool[key].image.data().name << '\n';
             
-            Texture texture = pool[key];
+            Texture& texture = pool[key];
             auto device = *Core::getInstance().getDevice();
             
             vkDestroySampler(device, texture.sampler, nullptr);
 
-            std::cout << "Destroying Texture " << texture.image.data().name << '\n';
-            cache[std::type_index(typeid(Texture))].erase(texture.image.data().name);
+            std::cout << "Destroying Texture " << texture.name << '\n';
+            cache[std::type_index(typeid(Texture))].erase(texture.name);
             pool.erase(key);
         }
     }
@@ -389,7 +396,7 @@ namespace Engine {
 
             std::cout << "Freeing Mesh GPU memory for " << pool[key].name << '\n';
             
-            Mesh m = pool[key];
+            Mesh& m = pool[key];
 
             GPUResourceManager::getInstance().releaseBuffer(m.vertexBuffer, m.vertexAllocation);
             GPUResourceManager::getInstance().releaseBuffer(m.indexBuffer, m.indexAllocation);
@@ -415,7 +422,7 @@ namespace Engine {
     }
 
     template <typename Resource>
-    const ResourceState& ResourceManager::getResourceState(const SlotKey& key, const PassKey<ResourceHandle<Resource>>&) const {
+    const ResourceState& ResourceManager::getState(const SlotKey& key, const PassKey<ResourceHandle<Resource>>&) const {
         auto& pool = pools.get<Resource>();
 
         assert(key.generations == pool.getSlot(key).generations);

@@ -7,15 +7,17 @@
 #include <graphics/pipeline.hpp>
 #include <graphics/swapChain.hpp>
 #include <graphics/commandBuffer.hpp>
-#include <graphics/texture.hpp>
 #include <graphics/tutorialParticleSystem.hpp>
 
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <engine/resources.hpp>
-using Engine::ResourceHandle;
+
 using Engine::Resources::Model;
 using Engine::Resources::Mesh;
+using Engine::Resources::Image;
+using Engine::Resources::Texture;
+using Engine::ResourceHandle;
 
 #include <vector>
 
@@ -46,8 +48,9 @@ namespace Graphics {
             Pipeline      graphicsPipeline = nullptr;
             Pipeline      computePipeline  = nullptr;
             CommandBuffer renderPass       = nullptr;
-            Texture       colorResolve     = nullptr;
-            Texture       depthBuffer      = nullptr;
+            
+            ResourceHandle<Image> colorResolve     = nullptr;
+            ResourceHandle<Image> depthBuffer      = nullptr;
 
             TutorialParticleSystem particleSystem = nullptr;
 
@@ -58,8 +61,8 @@ namespace Graphics {
             vector<vk::raii::DeviceMemory> uniformBuffersMemory;
             vector<void*>                  uniformBuffersMapped;
 
-            ResourceHandle<Model>                             model = nullptr;
-            ResourceHandle<Engine::Resources::Texture> modelTexture = nullptr;
+            ResourceHandle<Model>          model = nullptr;
+            ResourceHandle<Texture> modelTexture = nullptr;
 
             uint32_t frameIndex    = 0;
             uint32_t timelineValue = 0;

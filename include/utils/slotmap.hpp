@@ -40,6 +40,7 @@ namespace Utils {
             const Slot& getSlot(const SlotKey& key) const;
             
             const T& operator[](const SlotKey& key) const;
+            T& operator[](const SlotKey& key);
         private:
             uint32_t allocationChunkSize;
             uint32_t freeHead;
@@ -53,8 +54,8 @@ namespace Utils {
 
             SlotHandler<Slot> slotHandler;
 
-            const uint32_t pushFreeList() noexcept;
-            void popFreeList(const uint32_t keyIndex)  noexcept;
+            const uint32_t popFreeList() noexcept;
+            void pushFreeList(const uint32_t keyIndex)  noexcept;
             void reallocate();
         };
 }

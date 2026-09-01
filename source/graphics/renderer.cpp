@@ -4,8 +4,19 @@
 #include <runtime/tiny_obj_loader.h>
 
 #include <unordered_map>
+#include <experimental/array>
 
 #include <engine/resourceEngine.hpp>
+#include <engine/gpuResourceManager.hpp>
+
+#include <engine/factory.hpp>
+
+using Engine::ResourceManager;
+using Engine::GPUResourceManager;
+
+using namespace Engine::Factory::ImageFTY;
+
+using std::experimental::make_array;
 
 namespace Graphics {
     Renderer& Renderer::getInstance() {
@@ -25,14 +36,43 @@ namespace Graphics {
         //computePipeline  = Pipeline::createComputePipeline(core.getDevice());
         renderPass       = CommandBuffer(core.getGraphicsCommandPool(), &core.getGraphicsQueue(), vk::CommandBufferLevel::ePrimary, Models::MAX_FRAMES_IN_FLIGHT);
 
-        colorResolve  = Texture::createColorResolve(swapChain);
-        depthBuffer   = Texture::createDepthBuffer(swapChain);
+        auto [resolveInfo, rAspect] = createColorResolveAttachment(swapChain.getExtent().width, swapChain.getExtent().height, static_cast<VkFormat>(swapChain.getSurfaceFormat().format));
+        auto [depthInfo,   dAspect] = createDepthAttachment(swapChain.getExtent().width, swapChain.getExtent().height, static_cast<VkFormat>(core.findDepthFormat()));
+
+        colorResolve = ResourceHandle<Image>(ResourceManager::getInstance().createImage(
+            "ResolveAttachment", resolveInfo, rAspect
+        ));
+        
+        depthBuffer  = ResourceHandle<Image>(ResourceManager::getInstance().createImage(
+            "DepthBuffer", depthInfo, dAspect
+        ));
         
         std::string modelPath   = (Runtime::FileHelper::getExecutablePath() / Engine::Paths::MODELS / "viking_room.glb").string();
         std::string texturePath = (Runtime::FileHelper::getExecutablePath() / Engine::Paths::TEXTURES / "viking_room.ktx2").string();
-        model = ResourceHandle<Model>(Engine::ResourceManager::getInstance().load<Model>(modelPath));
-        modelTexture = ResourceHandle<Engine::Resources::Texture>(Engine::ResourceManager::getInstance().load<Engine::Resources::Texture>(texturePath));
-        
+        model = ResourceHandle<Model>(ResourceManager::getInstance().load<Model>(modelPath));
+        modelTexture = ResourceHandle<Texture>(ResourceManager::getInstance().load<Texture>(texturePath));
+
+        GPUResourceManager::getInstance().transferResourceQueueFamily<Image, ImageState>(
+            modelTexture.data().image, 
+            { .currentQueueFamily = core.getGraphicsQueueIndex() }, 
+            CommandBuffer::singleTimeTransfer(), CommandBuffer::singleTimeGraphics()
+        );
+
+        auto cbGraphics = CommandBuffer::singleTimeGraphics();
+
+        GPUResourceManager::getInstance().updateResourceState<Image, ImageState>(
+            modelTexture.data().image,
+            { make_state_array(
+             { vk::PipelineStageFlagBits2::eFragmentShader,
+               vk::AccessFlagBits2::eShaderRead,
+               vk::ImageLayout::eShaderReadOnlyOptimal }),
+             Core::getInstance().getGraphicsQueueIndex()   
+            },
+           cbGraphics
+        );
+
+        cbGraphics.submit();
+
         //particleSystem = TutorialParticleSystem(swapChain.getExtent().width, swapChain.getExtent().height, 4096);
 
         //computePipeline.createComputeDescriptorPool(core.getDevice());
@@ -103,32 +143,48 @@ namespace Graphics {
     void Renderer::recordRenderPass(uint32_t imageIndex) {
         renderPass[frameIndex].begin({});
 
-        vk::ImageMemoryBarrier2 colorBarrier {
-            .srcStageMask           = vk::PipelineStageFlagBits2::eColorAttachmentOutput, .srcAccessMask          = {},
-            .dstStageMask           = vk::PipelineStageFlagBits2::eColorAttachmentOutput, .dstAccessMask          = vk::AccessFlagBits2::eColorAttachmentWrite,
-            .oldLayout              = vk::ImageLayout::eUndefined,                        .newLayout              = vk::ImageLayout::eColorAttachmentOptimal,
-            .srcQueueFamilyIndex    = vk::QueueFamilyIgnored,                             .dstQueueFamilyIndex    = vk::QueueFamilyIgnored,
-            .image                  = swapChain.getImage(imageIndex),
-            .subresourceRange       = { .aspectMask = vk::ImageAspectFlagBits::eColor, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1 }
-        };
+        // Discard all contents
+        GPUResourceManager::getInstance().updateResourceState<Image, ImageState>(
+            swapChain.getImage(imageIndex), {}
+        );
+
+        GPUResourceManager::getInstance().updateResourceState<Image, ImageState>(
+            swapChain.getImage(imageIndex),
+            { { vk::PipelineStageFlagBits2::eColorAttachmentOutput, 
+                vk::AccessFlagBits2::eColorAttachmentWrite, 
+                vk::ImageLayout::eColorAttachmentOptimal }, 
+                vk::QueueFamilyIgnored }, 
+            renderPass, frameIndex
+        );
 
         vk::PipelineStageFlags2 depthStageFlags = vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests;
         
-        // Wrost function signature ever
-        // TODO: See how this can be improved
-        colorResolve.updateImageLayout(renderPass, vk::ImageLayout::eColorAttachmentOptimal, vk::AccessFlagBits2::eColorAttachmentWrite, vk::PipelineStageFlagBits2::eColorAttachmentOutput, frameIndex, true);
-        depthBuffer.updateImageLayout(renderPass, vk::ImageLayout::eDepthAttachmentOptimal, vk::AccessFlagBits2::eDepthStencilAttachmentWrite,  depthStageFlags, frameIndex, true);
-
-        Texture::updateImageLayout(renderPass, colorBarrier, frameIndex);
+        GPUResourceManager::getInstance().updateResourceState<Image, ImageState>(
+            colorResolve,
+            { { vk::PipelineStageFlagBits2::eColorAttachmentOutput, 
+                vk::AccessFlagBits2::eColorAttachmentWrite, 
+                vk::ImageLayout::eColorAttachmentOptimal }, 
+                vk::QueueFamilyIgnored }, 
+            renderPass, frameIndex
+        );
+        
+        GPUResourceManager::getInstance().updateResourceState<Image, ImageState>(
+            depthBuffer,
+            { { depthStageFlags ,
+                vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
+                vk::ImageLayout::eDepthAttachmentOptimal },
+                vk::QueueFamilyIgnored },
+            renderPass, frameIndex
+        );
 
         vk::ClearValue clearColor = vk::ClearColorValue(0.1f, 0.1f, 0.1f, 1.0f);
         vk::ClearValue clearDepth = vk::ClearDepthStencilValue(1.0f, 0.0f);
 
         vk::RenderingAttachmentInfo colorAttachmentInfo {
-            .imageView          = colorResolve.getImageView(),
+            .imageView          = static_cast<vk::ImageView>(colorResolve.data().view),
             .imageLayout        = vk::ImageLayout::eColorAttachmentOptimal,
             .resolveMode        = vk::ResolveModeFlagBits::eAverage,
-            .resolveImageView   = swapChain.getImageView(imageIndex),
+            .resolveImageView   = swapChain.getImage(imageIndex).data().view,
             .resolveImageLayout = vk::ImageLayout::eColorAttachmentOptimal,
             .loadOp             = vk::AttachmentLoadOp::eClear,
             .storeOp            = vk::AttachmentStoreOp::eStore,
@@ -136,7 +192,7 @@ namespace Graphics {
         };
 
         vk::RenderingAttachmentInfo depthAttachmentInfo {
-            .imageView      = *depthBuffer.getImageView(),
+            .imageView      = static_cast<vk::ImageView>(depthBuffer.data().view),
             .imageLayout    = vk::ImageLayout::eDepthAttachmentOptimal,
             .loadOp         = vk::AttachmentLoadOp::eClear,
             .storeOp        = vk::AttachmentStoreOp::eDontCare,
@@ -187,11 +243,14 @@ namespace Graphics {
         //renderPass[frameIndex].drawIndexed(static_cast<uint32_t>(mesh.indexCount), 1, 0, 0, 0);
         renderPass[frameIndex].endRendering();
 
-        colorBarrier.srcStageMask  = vk::PipelineStageFlagBits2::eColorAttachmentOutput; colorBarrier.dstStageMask  = vk::PipelineStageFlagBits2::eBottomOfPipe;
-        colorBarrier.srcAccessMask = vk::AccessFlagBits2::eColorAttachmentWrite;         colorBarrier.dstAccessMask = {};
-        colorBarrier.oldLayout     = vk::ImageLayout::eAttachmentOptimal;                colorBarrier.newLayout     = vk::ImageLayout::ePresentSrcKHR;
-
-        Texture::updateImageLayout(renderPass, colorBarrier, frameIndex);
+        GPUResourceManager::getInstance().updateResourceState<Image, ImageState>(
+            swapChain.getImage(imageIndex),
+            { { vk::PipelineStageFlagBits2::eBottomOfPipe, 
+                vk::AccessFlagBits2::eNone, 
+                vk::ImageLayout::ePresentSrcKHR }, 
+                vk::QueueFamilyIgnored }, 
+            renderPass, frameIndex
+        );
     }
 
     void Renderer::drawFrame() {
@@ -214,8 +273,20 @@ namespace Graphics {
             std::cout << "Swap chain is out of date. Recreating..." << '\n';
             
             device.waitIdle(); // Wait until resource is no longer being used before recreating
-            colorResolve = Texture::createColorResolve(swapChain);
-            depthBuffer  = Texture::createDepthBuffer(swapChain);
+            swapChain    = SwapChain(swapChain, surface, physicalDevice, device);
+
+            {
+                auto [rInfo, rAspect] = createColorResolveAttachment(
+                    swapChain.getExtent().width, swapChain.getExtent().height, static_cast<VkFormat>(swapChain.getSurfaceFormat().format)
+                );
+
+                auto [dInfo, dAspect] = createDepthAttachment(
+                    swapChain.getExtent().width, swapChain.getExtent().height, static_cast<VkFormat>(Core::getInstance().findDepthFormat())
+                );
+
+                colorResolve.recreate(rInfo, rAspect);            
+                depthBuffer.recreate(dInfo, dAspect);
+            }
             
             return;
         }
@@ -296,8 +367,18 @@ namespace Graphics {
 
                 device.waitIdle(); // Wait until resource is no longer being used before recreating
                 swapChain    = SwapChain(swapChain, surface, physicalDevice, device);
-                colorResolve = Texture::createColorResolve(swapChain);
-                depthBuffer  = Texture::createDepthBuffer(swapChain);
+                {
+                    auto [rInfo, rAspect] = createColorResolveAttachment(
+                        swapChain.getExtent().width, swapChain.getExtent().height, static_cast<VkFormat>(swapChain.getSurfaceFormat().format)
+                    );
+
+                    auto [dInfo, dAspect] = createDepthAttachment(
+                        swapChain.getExtent().width, swapChain.getExtent().height, static_cast<VkFormat>(Core::getInstance().findDepthFormat())
+                    );
+
+                    colorResolve.recreate(rInfo, rAspect);            
+                    depthBuffer.recreate(dInfo, dAspect);
+                }
                 break;
             default:
                 std::cout << "Queue returned an unexpected result !\n";
@@ -305,5 +386,6 @@ namespace Graphics {
 	    }
 
         frameIndex = (frameIndex + 1) % Models::MAX_FRAMES_IN_FLIGHT;
+
     }
 }

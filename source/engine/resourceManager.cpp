@@ -1,4 +1,7 @@
 #include <engine/resourceEngine.hpp>
+#include <vulkan/utility/vk_format_utils.h>
+
+using namespace Engine::Resources;
 
 namespace Engine {
     ResourceManager& ResourceManager::getInstance() {
@@ -51,6 +54,7 @@ namespace Engine {
             .aspectFlags = imageAspect,
             .width       = imageCreateInfo.extent.width,
             .height      = imageCreateInfo.extent.height,
+            .depth       = imageCreateInfo.extent.depth,
             .channels    = textureAsset.layout.channels,
             .mipCount    = static_cast<uint32_t>(textureAsset.layout.mips.size()),
             .layers      = textureAsset.layout.layers
@@ -63,19 +67,23 @@ namespace Engine {
         return std::move(ResourceHandle<Image>(key));
     }
 
-    const ResourceHandle<Image> ResourceManager::createImage(const std::string& name, const VkImageCreateInfo& imageCreateInfo, const VkImageAspectFlags imageAspect, const VkImageViewType viewType, const uint32_t mipCount, const uint32_t layers, const uint32_t channels) {
+    const ResourceHandle<Image> ResourceManager::createImage(const std::string& name, const VkImageCreateInfo& imageCreateInfo, const VkImageAspectFlags imageAspect) {
         assert(findKeyByName(std::type_index(typeid(Image)), name) == nullptr);
 
         VkImage image;
         VmaAllocation allocation;
         auto initialState = GPUResourceManager::getInstance().uploadData(image, allocation, imageCreateInfo);
 
-         VkImageViewCreateInfo viewCreateInfo {
+        VkImageViewType viewType = imageCreateInfo.extent.depth > 1 ? VK_IMAGE_VIEW_TYPE_3D : 
+                           std::min(imageCreateInfo.extent.height, imageCreateInfo.extent.width) > 1 ? 
+                           VK_IMAGE_VIEW_TYPE_2D : VK_IMAGE_VIEW_TYPE_1D;
+
+        VkImageViewCreateInfo viewCreateInfo {
             .sType            = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
             .image            = image,
             .viewType         = viewType,
             .format           = imageCreateInfo.format,
-            .subresourceRange = {.aspectMask = imageAspect, .baseMipLevel = 0, .levelCount = mipCount, .baseArrayLayer = 0, .layerCount = layers}
+            .subresourceRange = {.aspectMask = imageAspect, .baseMipLevel = 0, .levelCount = imageCreateInfo.mipLevels, .baseArrayLayer = 0, .layerCount = imageCreateInfo.arrayLayers}
         };
 
         VkImageView view;
@@ -89,9 +97,10 @@ namespace Engine {
             .aspectFlags = imageAspect,
             .width       = imageCreateInfo.extent.width,
             .height      = imageCreateInfo.extent.height,
-            .channels    = channels,
-            .mipCount    = mipCount,
-            .layers      = layers
+            .depth       = imageCreateInfo.extent.depth,
+            .channels    = vkuFormatComponentCount(imageCreateInfo.format),
+            .mipCount    = imageCreateInfo.mipLevels,
+            .layers      = imageCreateInfo.arrayLayers
         }));
 
         GPUResourceManager::getInstance().registerResourceState<ImageState>(key, initialState);
@@ -101,47 +110,81 @@ namespace Engine {
         return std::move(ResourceHandle<Image>(key));
     }
 
-    const ResourceHandle<Image> ResourceManager::createDepthAttachment(const uint32_t width, const uint32_t height) {
-        auto depthFormat = static_cast<VkFormat>(Core::getInstance().findDepthFormat());
-        auto imageType   = VkImageType::VK_IMAGE_TYPE_2D;
-        auto viewType    = VkImageViewType::VK_IMAGE_VIEW_TYPE_2D;
-        auto extent      = VkExtent3D { width, height, 1 };
+    void ResourceManager::recreate(const ResourceHandle<Image>& handle, const VkImageCreateInfo& imageCreateInfo, const VkImageAspectFlags imageAspect, const PassKey<ResourceHandle<Image>>&) {
+        auto& pool = pools.get<Image>();
 
-        return createImage(
-            std::string("DepthBuffer"), 
-            { .sType       = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, 
-              .imageType   = imageType, .format = depthFormat, 
-              .extent      = extent, 
-              .mipLevels   = 1, .arrayLayers = 1,
-              .samples     = VK_SAMPLE_COUNT_1_BIT, 
-              .tiling      = VK_IMAGE_TILING_OPTIMAL,
-              .usage       = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-              .sharingMode = VK_SHARING_MODE_EXCLUSIVE },
-            VK_IMAGE_ASPECT_DEPTH_BIT,  
-            VK_IMAGE_VIEW_TYPE_2D,   
-            1, 1, 1
-        );
+        assert(handle.key().generations == pool.getSlot(handle.key()).generations);
+
+        Image& image = pool[handle.key()];
+
+        auto device = *Core::getInstance().getDevice();
+        
+        vkDestroyImageView(device, image.view, nullptr);
+        
+        if (image.managed) {
+            GPUResourceManager::getInstance().releaseBuffer(image.image, image.allocation);
+            GPUResourceManager::getInstance().uploadData(image.image, image.allocation, imageCreateInfo);
+        }
+
+        VkImageViewType viewType = imageCreateInfo.extent.depth > 1 ? VK_IMAGE_VIEW_TYPE_3D : 
+                           std::min(imageCreateInfo.extent.height, imageCreateInfo.extent.width) > 1 ? 
+                           VK_IMAGE_VIEW_TYPE_2D : VK_IMAGE_VIEW_TYPE_1D;
+
+        VkImageViewCreateInfo viewCreateInfo {
+            .sType            = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .image            = image.image,
+            .viewType         = viewType,
+            .format           = imageCreateInfo.format,
+            .subresourceRange = {.aspectMask = imageAspect, .baseMipLevel = 0, .levelCount = imageCreateInfo.mipLevels, .baseArrayLayer = 0, .layerCount = imageCreateInfo.arrayLayers }
+        };
+
+        vkCreateImageView(*Core::getInstance().getDevice(), &viewCreateInfo, nullptr, &image.view);
+
+        GPUResourceManager::getInstance().updateResourceState<Image, ImageState>(handle, { make_state_array({}), VK_QUEUE_FAMILY_IGNORED });
     }
 
-    const ResourceHandle<Image> ResourceManager::createColorResolveAttachment(const uint32_t width, const uint32_t height, VkFormat format) {
-        auto imageType   = VkImageType::VK_IMAGE_TYPE_2D;
-        auto viewType    = VkImageViewType::VK_IMAGE_VIEW_TYPE_2D;
-        auto extent      = VkExtent3D { width, height, 1 };
+    const ResourceHandle<Image> ResourceManager::registerExternal(
+                const std::string& name, const VkImage& image, const VkImageAspectFlags imageAspect, const VkFormat format,
+                const uint32_t width, const uint32_t height, const uint32_t depth,
+                const uint32_t mipCount, const uint32_t layerCount,
+                const ImageState& state,
+                const VmaAllocation& allocation) {
 
-        return createImage(
-            std::string("ResolveAttachment"), 
-            { .sType       = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, 
-              .imageType   = imageType, .format = format, 
-              .extent      = extent, 
-              .mipLevels   = 1, .arrayLayers = 1,
-              .samples     = (VkSampleCountFlagBits)Core::getInstance().getMaxUsableSampleCount(), 
-              .tiling      = VK_IMAGE_TILING_OPTIMAL,
-              .usage       = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
-              .sharingMode = VK_SHARING_MODE_EXCLUSIVE },
-            VK_IMAGE_ASPECT_DEPTH_BIT,  
-            VK_IMAGE_VIEW_TYPE_2D,   
-            1, 1, 1
-        );
+        VkImageViewType viewType = depth > 1 ? VK_IMAGE_VIEW_TYPE_3D : 
+                           std::min(height, width) > 1 ? 
+                           VK_IMAGE_VIEW_TYPE_2D : VK_IMAGE_VIEW_TYPE_1D;
+
+        VkImageViewCreateInfo viewCreateInfo {
+            .sType            = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .image            = image,
+            .viewType         = viewType,
+            .format           = format,
+            .subresourceRange = {.aspectMask = imageAspect, .baseMipLevel = 0, .levelCount = mipCount, .baseArrayLayer = 0, .layerCount = layerCount }
+        };
+
+        VkImageView view;
+        vkCreateImageView(*Core::getInstance().getDevice(), &viewCreateInfo, nullptr, &view);
+
+        SlotKey key = pools.get<Image>().emplace(std::move( Image{
+            .name        = name,
+            .allocation  = allocation,
+            .image       = image,
+            .view        = view,
+            .aspectFlags = imageAspect,
+            .width       = width,
+            .height      = height,
+            .depth       = depth,
+            .channels    = vkuFormatComponentCount(format),
+            .mipCount    = mipCount,
+            .layers      = layerCount,
+            .managed     = 0
+        }));
+
+        GPUResourceManager::getInstance().registerResourceState<ImageState>(key, state);
+
+        cache[std::type_index(typeid(Image))][name] = key;
+
+        return std::move(ResourceHandle<Image>(key));
     }
 
     SlotKey* const ResourceManager::findKeyByName(const std::type_index& typeId, const std::string& name) { 

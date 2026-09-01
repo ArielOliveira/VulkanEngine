@@ -38,15 +38,13 @@ namespace Utils {
                 return { ~0U, ~0U };
         }
         
-        uint32_t slotKey = pushFreeList();
-        
-        //Slot& slot = slots[slotKey];
-        //slot = { slotKey, slot.generations+1 };
+        uint32_t slotKey = popFreeList();
+        slotHandler.reinsert(slots[slotKey], static_cast<uint32_t>(data.size()));
         
         data.emplace_back(std::forward<Args>(args)...);
         eraseTable.push_back(slotKey);
 
-        return slotHandler.reinsert(slots[slotKey], slotKey);
+        return { slotKey, slots[slotKey].generations };
     }
 
     template <typename T, typename Slot>
@@ -59,10 +57,6 @@ namespace Utils {
 
         uint32_t dataIndex = slotHandler.recycle(slots[key.index]).index;
         
-        //Slot& slot = slots[key.index];
-        //uint32_t dataIndex = slot.index;
-        //slot.generations++;
-
         std::swap(data[dataIndex], data.back());
         std::swap(eraseTable[dataIndex], eraseTable.back());
 
@@ -72,7 +66,7 @@ namespace Utils {
         if (dataIndex < data.size())
             slots[eraseTable[dataIndex]].index = dataIndex;
         
-        popFreeList(key.index);
+        pushFreeList(key.index);
     }
 
     template <typename T, typename Slot>
@@ -98,7 +92,7 @@ namespace Utils {
     }
 
     template <typename T, typename Slot>
-    const uint32_t SlotMap<T, Slot>::pushFreeList() noexcept {
+    const uint32_t SlotMap<T, Slot>::popFreeList() noexcept {
         uint32_t slotKey = freeHead;    
         freeHead = slots[freeHead].index;
 
@@ -106,7 +100,7 @@ namespace Utils {
     }
 
     template <typename T, typename Slot>
-    void SlotMap<T, Slot>::popFreeList(const uint32_t keyIndex) noexcept {
+    void SlotMap<T, Slot>::pushFreeList(const uint32_t keyIndex) noexcept {
         uint32_t previousTail = freeTail;
         freeTail = keyIndex;
 
@@ -152,6 +146,14 @@ namespace Utils {
 
     template <typename T, typename Slot>
     const T& SlotMap<T, Slot>::operator[](const SlotKey& key) const {
+        assert(key.index >= 0 && !(key.index >= slots.size()));
+        assert(key.generations == slots[key.index].generations);
+
+        return data[slots[key.index].index];
+    }
+
+    template <typename T, typename Slot>
+    T& SlotMap<T, Slot>::operator[](const SlotKey& key) {
         assert(key.index >= 0 && !(key.index >= slots.size()));
         assert(key.generations == slots[key.index].generations);
 

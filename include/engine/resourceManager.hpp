@@ -19,14 +19,18 @@
 #include <utils/slotmap.hpp>
 #include <utils/passKey.hpp>
 
+#include <graphics/commandBuffer.hpp>
+
 using Utils::SlotMap;
 using Utils::PassKey;
 
 using Engine::Descriptors::TextureAsset;
+using Graphics::CommandBuffer;
 
 using fastgltf::Asset;
 
 using namespace Engine::Resources;
+using namespace Engine::Resources::Trackers;
 
 namespace Engine {
     class ResourceManager {
@@ -42,15 +46,22 @@ namespace Engine {
             ~ResourceManager();
 
             const ResourceHandle<Image> createImage(const std::string& name, const TextureAsset& textureMetaData, const VkImageCreateInfo& imageCreateInfo, const VkImageAspectFlags imageAspect);
-            const ResourceHandle<Image> createImage(const std::string& name, const VkImageCreateInfo& imageCreateInfo, const VkImageAspectFlags imageAspect, const VkImageViewType viewType, const uint32_t mipCount, const uint32_t layers, const uint32_t channels); 
-            const ResourceHandle<Image> createDepthAttachment(const uint32_t width, const uint32_t height);
-            const ResourceHandle<Image> createColorResolveAttachment(const uint32_t width, const uint32_t height, VkFormat format);
+            const ResourceHandle<Image> createImage(const std::string& name, const VkImageCreateInfo& imageCreateInfo, const VkImageAspectFlags imageAspect); 
+
+            void recreate(const ResourceHandle<Image>& handle, const VkImageCreateInfo& imageCreateInfo, const VkImageAspectFlags imageAspect, const PassKey<ResourceHandle<Image>>&);
 
             template <typename Resource>
             const ResourceHandle<Resource> load(const std::string& path);
 
             template <typename Resource>
             const ResourceHandle<Resource> load(const std::string& sourceName, const Asset& asset, const size_t resourceIndex);
+
+            const ResourceHandle<Image> registerExternal(
+                const std::string& name, const VkImage& image, const VkImageAspectFlags imageAspect, const VkFormat format,
+                const uint32_t width, const uint32_t height, const uint32_t depth,
+                const uint32_t mipCount = 1, const uint32_t layerCount = 1,
+                const ImageState& state = { make_state_array({}), VK_QUEUE_FAMILY_IGNORED },
+                const VmaAllocation& allocation = nullptr);
 
             template <typename Resource>
             void acquire(const SlotKey& key, const PassKey<ResourceHandle<Resource>>&);
@@ -65,7 +76,7 @@ namespace Engine {
             const Resource& get(const SlotKey& key, const PassKey<ResourceHandle<Resource>>&) const;
 
             template <typename Resource>
-            const ResourceState& getResourceState(const SlotKey& key, const PassKey<ResourceHandle<Resource>>&) const;
+            const ResourceState& getState(const SlotKey& key, const PassKey<ResourceHandle<Resource>>&) const;
         
         private:
             template <typename... ResourceTypes>

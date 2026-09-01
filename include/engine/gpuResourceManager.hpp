@@ -15,6 +15,7 @@
 
 using Utils::SparseSet;
 using namespace Engine::Resources;
+using namespace Engine::Resources::Trackers;
 using Engine::Descriptors::ImageLayout;
 using Engine::Descriptors::ImageMipLayout;
 
@@ -39,9 +40,14 @@ namespace Engine {
             const ImageState  uploadData(VkImage& image, VmaAllocation& allocation, const std::byte* src, const VkDeviceSize size, const ImageLayout& imageLayout,  const VkImageCreateInfo& createInfo, const VkImageAspectFlags imageAspect);
             const BufferState uploadData(VkBuffer& buffer, VmaAllocation& allocation, const std::byte* src, const VkBufferCreateInfo& createInfo);
 
+            template<typename ResourceType, typename ResourceState>
+            void transferResourceQueueFamily(const ResourceHandle<ResourceType>& handle, const ResourceState& newState, const CommandBuffer& src, const CommandBuffer& dst, const uint32_t srcIdx = 0, const uint32_t dstIdx = 0);
             
             template<typename ResourceType, typename ResourceState>
-            void updateResourceState(const ResourceHandle<ResourceType>& handle, const ResourceState& newState, const CommandBuffer& commandBuffer);
+            void updateResourceState(const ResourceHandle<ResourceType>& handle, const ResourceState& newState, const CommandBuffer& commandBuffer, const uint32_t cbIdx = 0);
+
+            template<typename ResourceType, typename ResourceState>
+            void updateResourceState(const ResourceHandle<ResourceType>& handle, const ResourceState& newState);
             
             template<typename ResourceState>
             void registerResourceState(const SlotKey& key, const ResourceState& newState);
@@ -63,6 +69,11 @@ namespace Engine {
             void createStagingBuffer();
             void allocateBuffer(VkImage& image, VmaAllocation& allocation, const VkImageCreateInfo& createInfo);
             void allocateBuffer(VkBuffer& buffer, VmaAllocation& allocation, const VkBufferCreateInfo& createInfo);
+            void updateImageState(const SlotKey& key, const Image&  image,  const ImageState& newState, const CommandBuffer& commandBuffer, const uint32_t cbIdx = 0);
+            void updateBufferState(const SlotKey& key, const VkBuffer& buffer, const VkDeviceSize size, const VkDeviceSize offset, const BufferState& newState, const CommandBuffer& commandBuffer, const uint32_t cbIdx = 0);
+
+            void transferImageQueueFamily(const SlotKey& key, const Image& image, const ImageState& newState, const CommandBuffer& src, const CommandBuffer& dst, const uint32_t srcIdx = 0, const uint32_t dstIdx = 0);
+            void transferBufferQueueFamily(const SlotKey& key, const VkBuffer& buffer, const VkDeviceSize size, const VkDeviceSize offset, const BufferState& newState, const CommandBuffer& src, const CommandBuffer& dst, const uint32_t srcIdx = 0, const uint32_t dstIdx = 0);
 
             GPUResourceManager();
 
