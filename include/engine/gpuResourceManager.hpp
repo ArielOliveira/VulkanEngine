@@ -13,8 +13,11 @@
 #include <engine/descriptors.hpp>
 #include <graphics/commandBuffer.hpp>
 
+using Utils::SlotMap;
 using Utils::SparseSet;
-using namespace Engine::Resources;
+using Utils::PassKey;
+
+using namespace Engine::Resources::GPU;
 using namespace Engine::Resources::Trackers;
 using Engine::Descriptors::ImageLayout;
 using Engine::Descriptors::ImageMipLayout;
@@ -34,30 +37,41 @@ namespace Engine {
             GPUResourceManager& operator=(const GPUResourceManager&) = delete;
             GPUResourceManager& operator=(GPUResourceManager&&) noexcept = delete;
 
-            void releaseBuffer(VkImage& image, VmaAllocation& allocation);
-            void releaseBuffer(VkBuffer& buffer, VmaAllocation& allocation);
-            const ImageState  uploadData(VkImage& image, VmaAllocation& allocation, const VkImageCreateInfo& createInfo);
-            const ImageState  uploadData(VkImage& image, VmaAllocation& allocation, const std::byte* src, const VkDeviceSize size, const ImageLayout& imageLayout,  const VkImageCreateInfo& createInfo, const VkImageAspectFlags imageAspect);
-            const BufferState uploadData(VkBuffer& buffer, VmaAllocation& allocation, const std::byte* src, const VkBufferCreateInfo& createInfo);
+            void release(const SlotKey& key, const PassKey<ResourceHandle<Buffer>>&);
+            void release(const SlotKey& key, const PassKey<ResourceHandle<Image>>&);
 
-            template<typename ResourceType, typename ResourceState>
-            void transferResourceQueueFamily(const ResourceHandle<ResourceType>& handle, const ResourceState& newState, const CommandBuffer& src, const CommandBuffer& dst, const uint32_t srcIdx = 0, const uint32_t dstIdx = 0);
+            void acquire(const SlotKey& key, const PassKey<ResourceHandle<Buffer>>&);
+            void acquire(const SlotKey& key, const PassKey<ResourceHandle<Image>>&);
             
-            template<typename ResourceType, typename ResourceState>
-            void updateResourceState(const ResourceHandle<ResourceType>& handle, const ResourceState& newState, const CommandBuffer& commandBuffer, const uint32_t cbIdx = 0);
+            const ResourceHandle<Image>  create(const VkImageCreateInfo& createInfo);
+            const ResourceHandle<Image>  create(const std::byte* src, const VkDeviceSize size, const ImageLayout& imageLayout,  const VkImageCreateInfo& createInfo, const VkImageAspectFlags imageAspect);
+            const ResourceHandle<Buffer> create(const std::byte* src, const VkBufferCreateInfo& createInfo);
 
-            template<typename ResourceType, typename ResourceState>
-            void updateResourceState(const ResourceHandle<ResourceType>& handle, const ResourceState& newState);
+            const ResourceHandle<Image>  registerExternal(const VkImage& image, const VkImageAspectFlags imageAspect, const VkFormat format,
+                                                          const uint32_t width, const uint32_t height, const uint32_t depth,
+                                                          const uint32_t mipCount = 1, const uint32_t layerCount = 1,
+                                                          const VmaAllocation& allocation = VK_NULL_HANDLE);
+
+            void transferQueueFamily(const SlotKey& key, const ImageState& newState, const CommandBuffer& src, const CommandBuffer& dst, const uint32_t srcIdx = 0, const uint32_t dstIdx = 0);
+            void transferQueueFamily(const SlotKey& key, const VkDeviceSize size, const VkDeviceSize offset, const BufferState& newState, const CommandBuffer& src, const CommandBuffer& dst, const uint32_t srcIdx = 0, const uint32_t dstIdx = 0);
+
+            void clearLayout(const SlotKey& key);
+            void clearAccess(const SlotKey& key);
+            void clearStage(const SlotKey& key);
+            void clearState(const SlotKey& key);
+    
+            void overwriteState(const SlotKey& key, const ImageState& newState);
+            void overwriteState(const SlotKey& key, const VkDeviceSize size, const VkDeviceSize offset, const BufferState& newState);
             
-            template<typename ResourceState>
-            void registerResourceState(const SlotKey& key, const ResourceState& newState);
-
-            template<typename ResourceState>
-            void unregisterResourceState(const SlotKey& key);
+            void updateState(const SlotKey& key, const ImageState& newState, const CommandBuffer& commandBuffer, const uint32_t cbIdx = 0);
+            void updateState(const SlotKey& key, const VkDeviceSize size, const VkDeviceSize offset, const BufferState& newState, const CommandBuffer& commandBuffer, const uint32_t cbIdx = 0);
 
             ~GPUResourceManager();
 
         private:
+            using ImageAllocation  = std::tuple<VkImage, VmaAllocation, VmaAllocationInfo>;
+            using BufferAllocation = std::tuple<VkBuffer, VmaAllocation, VmaAllocationInfo>;
+
             struct StagingBuffer {
                 VkBuffer buffer;
                 VmaAllocation allocation;
@@ -65,27 +79,26 @@ namespace Engine {
                 VkDeviceSize capacity;
             };
 
-            void intializeAllocator();
-            void createStagingBuffer();
-            void allocateBuffer(VkImage& image, VmaAllocation& allocation, const VkImageCreateInfo& createInfo);
-            void allocateBuffer(VkBuffer& buffer, VmaAllocation& allocation, const VkBufferCreateInfo& createInfo);
-            void updateImageState(const SlotKey& key, const Image&  image,  const ImageState& newState, const CommandBuffer& commandBuffer, const uint32_t cbIdx = 0);
-            void updateBufferState(const SlotKey& key, const VkBuffer& buffer, const VkDeviceSize size, const VkDeviceSize offset, const BufferState& newState, const CommandBuffer& commandBuffer, const uint32_t cbIdx = 0);
-
-            void transferImageQueueFamily(const SlotKey& key, const Image& image, const ImageState& newState, const CommandBuffer& src, const CommandBuffer& dst, const uint32_t srcIdx = 0, const uint32_t dstIdx = 0);
-            void transferBufferQueueFamily(const SlotKey& key, const VkBuffer& buffer, const VkDeviceSize size, const VkDeviceSize offset, const BufferState& newState, const CommandBuffer& src, const CommandBuffer& dst, const uint32_t srcIdx = 0, const uint32_t dstIdx = 0);
-
             GPUResourceManager();
 
-            VmaAllocator allocator;
+            void intializeAllocator();
+            void createStagingBuffer();
+
+            const ImageAllocation   allocateBuffer(const VkImageCreateInfo& createInfo);
+            const BufferAllocation  allocateBuffer(const VkBufferCreateInfo& createInfo);
+
+            VmaAllocator  allocator;
             StagingBuffer stagingBuffer;
 
-            SparseSet<ImageState>  imageStates;
-            SparseSet<BufferState> bufferStates;
+            SlotMap<Buffer, ResourceSlot> buffers;       
+            SlotMap<Image,  ResourceSlot> images;
             
+            SparseSet<BufferState>          bufferStates;
+            SparseSet<ImageState>           imageStates;
+
+            SparseSet<VmaAllocation>        bufferAllocations;
+            SparseSet<VmaAllocation>        imageAllocations;
     };
 }
-
-#include <engine/gpuResourceManager.tpp>
 
 #endif

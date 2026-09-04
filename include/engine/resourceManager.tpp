@@ -354,7 +354,7 @@ namespace Engine {
             vkDestroyImageView(device, image.view, nullptr);
             GPUResourceManager::getInstance().unregisterResourceState<ImageState>(key);
 
-            if (image.managed)
+            if (image.owned)
                 GPUResourceManager::getInstance().releaseBuffer(image.image, image.allocation);
             
             std::cout << "Destroying Image " << image.name << '\n';
@@ -372,7 +372,7 @@ namespace Engine {
         if (--pool.getSlot(key).refCount == 0) {
             pool.getSlot(key).state = ResourceState::Releasing;
 
-            std::cout << "Freeing Texture " << pool[key].image.data().name << '\n';
+            std::cout << "Freeing Texture " << pool[key].name << '\n';
             
             Texture& texture = pool[key];
             auto device = *Core::getInstance().getDevice();

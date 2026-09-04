@@ -18,6 +18,24 @@ namespace vk {
     enum class IndexType;
 }
 
+namespace Engine::Resources::GPU {
+    struct Buffer {
+        VkBuffer     buffer;
+        VkDeviceSize size;
+    };
+
+    struct Image {
+        VkImage              image;
+        VkImageView          view;
+        VkFormat             format;
+        vk::ImageAspectFlags aspect;
+
+        uint32_t width, height, depth;
+        uint32_t mipCount, layers;
+        uint32_t channels;
+    };  
+}
+
 namespace Engine::Resources {
     struct Shader {
         std::string name;
@@ -30,25 +48,10 @@ namespace Engine::Resources {
         std::string name;
     };
 
-    struct Image {
-        std::string name;
-
-        VmaAllocation allocation;
-
-        VkImage     image;
-        VkImageView view;
-
-        VkImageAspectFlags aspectFlags;
-
-        uint32_t width, height, depth, channels, mipCount, layers;
-
-        uint8_t managed = 1;
-    };
-
     struct Texture {
         std::string name;
 
-        ResourceHandle<Image> image;
+        ResourceHandle<GPU::Image> image;
 
         VkSampler sampler;
     };
@@ -63,14 +66,8 @@ namespace Engine::Resources {
     struct Mesh {
         std::string name;
 
-        VmaAllocation vertexAllocation;
-        VmaAllocation indexAllocation;
-
-        VkBuffer vertexBuffer;
-        VkBuffer indexBuffer;
-
-        VkDeviceSize vtxBufferSize;
-        VkDeviceSize idxBufferSize;
+        ResourceHandle<GPU::Buffer> vertexBuffer;
+        ResourceHandle<GPU::Buffer> indexBuffer;
         
         vk::IndexType indexType;
 
@@ -134,6 +131,33 @@ namespace Engine::Resources::Trackers {
         
         return stateArr;
     }
+}
+
+namespace Engine::Resources::Traits {
+    template <typename... Ts>
+    struct TypeList {};
+
+    using GpuResourceTypes = TypeList<GPU::Buffer, GPU::Image>;
+
+    template <typename T, typename List>
+    struct TypeListContains;
+
+    template <typename T, typename... Ts>
+    struct TypeListContains<T, TypeList<Ts...>>
+        : std::disjunction<std::is_same<T, Ts>...> {};
+
+    template <typename T>
+    inline constexpr bool is_gpu_resource_v = TypeListContains<T, GpuResourceTypes>::value;
+
+    template <typename T>
+    struct ResourceTraits {
+        static auto& manager() {
+            if constexpr (is_gpu_resource_v<T>)
+                return GPUResourceManager::instance();
+            else
+                return ResourceManager::instance();
+        }
+    };
 }
 
 #endif

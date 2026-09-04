@@ -13,8 +13,12 @@ namespace Engine::Factory {
     namespace ImageFTY {
         using ImageMetaData = tuple<VkImageCreateInfo, VkImageAspectFlags>;
 
-        const ImageMetaData createDepthAttachment(const uint32_t width, const uint32_t height, VkFormat depthFormat);
-        const ImageMetaData createColorResolveAttachment(const uint32_t width, const uint32_t height, VkFormat format);
+        const ImageMetaData createDepthAttachmentInfo(const uint32_t width, const uint32_t height, VkFormat depthFormat);
+        const ImageMetaData createColorResolveAttachmentInfo(const uint32_t width, const uint32_t height, VkFormat format);
+
+        const VkImageViewCreateInfo createImageViewInfo(const VkImage& image, const VkImageAspectFlags aspect, const VkFormat format, 
+                                                        const uint32_t width, const uint32_t height, const uint32_t depth,
+                                                        const uint32_t mipCount, const uint32_t layerCount);
     };
 }
 

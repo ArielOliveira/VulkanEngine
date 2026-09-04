@@ -144,11 +144,11 @@ namespace Graphics {
         renderPass[frameIndex].begin({});
 
         // Discard all contents
-        GPUResourceManager::getInstance().updateResourceState<Image, ImageState>(
+        GPUResourceManager::getInstance().updateState(
             swapChain.getImage(imageIndex), {}
         );
 
-        GPUResourceManager::getInstance().updateResourceState<Image, ImageState>(
+        GPUResourceManager::getInstance().updateState(
             swapChain.getImage(imageIndex),
             { { vk::PipelineStageFlagBits2::eColorAttachmentOutput, 
                 vk::AccessFlagBits2::eColorAttachmentWrite, 
@@ -159,7 +159,7 @@ namespace Graphics {
 
         vk::PipelineStageFlags2 depthStageFlags = vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests;
         
-        GPUResourceManager::getInstance().updateResourceState<Image, ImageState>(
+        GPUResourceManager::getInstance().updateState(
             colorResolve,
             { { vk::PipelineStageFlagBits2::eColorAttachmentOutput, 
                 vk::AccessFlagBits2::eColorAttachmentWrite, 
@@ -168,7 +168,7 @@ namespace Graphics {
             renderPass, frameIndex
         );
         
-        GPUResourceManager::getInstance().updateResourceState<Image, ImageState>(
+        GPUResourceManager::getInstance().updateState(
             depthBuffer,
             { { depthStageFlags ,
                 vk::AccessFlagBits2::eDepthStencilAttachmentWrite,

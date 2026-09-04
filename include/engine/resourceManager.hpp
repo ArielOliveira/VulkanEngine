@@ -61,7 +61,7 @@ namespace Engine {
                 const uint32_t width, const uint32_t height, const uint32_t depth,
                 const uint32_t mipCount = 1, const uint32_t layerCount = 1,
                 const ImageState& state = { make_state_array({}), VK_QUEUE_FAMILY_IGNORED },
-                const VmaAllocation& allocation = nullptr);
+                const VmaAllocation& allocation = VK_NULL_HANDLE);
 
             template <typename Resource>
             void acquire(const SlotKey& key, const PassKey<ResourceHandle<Resource>>&);

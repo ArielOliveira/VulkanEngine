@@ -37,6 +37,17 @@ namespace Engine {
     }
 
     template <typename T>
+    ResourceHandle<T>& ResourceHandle<T>::operator=(const ResourceHandle& rhs) noexcept {
+        assert(ResourceManager::getInstance().contains<T>(rhs.m_key, {}));
+
+        m_key = rhs.m_key;
+        
+        ResourceManager::getInstance().acquire<T>(m_key, {});
+
+        return *this;
+    }
+
+    template <typename T>
     ResourceHandle<T>& ResourceHandle<T>::operator=(ResourceHandle&& rhs) noexcept {        
         if (this != &rhs) 
             std::swap(m_key, rhs.m_key);

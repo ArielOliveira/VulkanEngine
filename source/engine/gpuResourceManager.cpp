@@ -1,12 +1,14 @@
 #include <engine/gpuAllocator.hpp>
+#include <vulkan/utility/vk_format_utils.h>
 #include <vk_mem_alloc.h>
 
 #include <engine/gpuResourceManager.hpp>
+#include <engine/factory.hpp>
 
 #include <graphics/core.hpp>
 
+using Engine::Factory::ImageFTY::createImageViewInfo;
 using Graphics::Core;
-
 
 namespace Engine {
     GPUResourceManager& GPUResourceManager::getInstance() {
@@ -60,43 +62,65 @@ namespace Engine {
         vmaCreateBuffer(allocator, &bufferInfo, &allocationCreateInfo, &stagingBuffer.buffer, &stagingBuffer.allocation, &stagingBuffer.allocInfo);
     }
 
-    void GPUResourceManager::releaseBuffer(VkImage& image, VmaAllocation& allocation) {
-        vmaDestroyImage(allocator, image, allocation);
+    void GPUResourceManager::release(const SlotKey& key, const PassKey<ResourceHandle<Buffer>>&) {
+        if (--buffers.getSlot(key).refCount == 0) {
+            vmaDestroyBuffer(allocator, buffers[key].buffer, bufferAllocations[key]);
+
+            bufferStates.erase(key);
+            bufferAllocations.erase(key);
+            buffers.erase(key);
+        }
     }
 
-    void GPUResourceManager::releaseBuffer(VkBuffer& buffer, VmaAllocation& allocation) {
-        vmaDestroyBuffer(allocator, buffer, allocation);
+    void GPUResourceManager::release(const SlotKey& key, const PassKey<ResourceHandle<Image>>&) {
+        if (--images.getSlot(key).refCount == 0) {
+            vmaDestroyImage(allocator, images[key].image, imageAllocations[key]);
+
+            imageStates.erase(key);
+            imageAllocations.erase(key);
+            images.erase(key);
+        }
     }
 
-    void GPUResourceManager::allocateBuffer(VkImage& image, VmaAllocation& allocation, const VkImageCreateInfo& createInfo) {
+    const GPUResourceManager::ImageAllocation GPUResourceManager::allocateBuffer(const VkImageCreateInfo& createInfo) {
         VmaAllocationCreateInfo allocationCreateInfo {
             .usage = VMA_MEMORY_USAGE_AUTO
         };
 
-        vmaCreateImage(allocator, &createInfo, &allocationCreateInfo, &image, &allocation, nullptr);
+        VkImage           image;
+        VmaAllocation     allocation;
+        VmaAllocationInfo allocationInfo;
+
+        vmaCreateImage(allocator, &createInfo, &allocationCreateInfo, &image, &allocation, &allocationInfo);
+
+        return { std::move(image), std::move(allocation), std::move(allocationInfo) };
     }
 
-    void GPUResourceManager::allocateBuffer(VkBuffer& buffer, VmaAllocation& allocation, const VkBufferCreateInfo& createInfo) {
+    const GPUResourceManager::BufferAllocation GPUResourceManager::allocateBuffer(const VkBufferCreateInfo& createInfo) {
         VmaAllocationCreateInfo allocationCreateInfo {
             .usage = VMA_MEMORY_USAGE_AUTO
         };
-
+        
+        VkBuffer      buffer;
+        VmaAllocation allocation;
         VmaAllocationInfo allocationInfo;
 
         vmaCreateBuffer(allocator, &createInfo, &allocationCreateInfo, &buffer, &allocation, &allocationInfo);
+
+        return { std::move(buffer), std::move(allocation), std::move(allocationInfo) };
     }
 
-    const ImageState GPUResourceManager::uploadData(VkImage& image, VmaAllocation& allocation, const VkImageCreateInfo& createInfo) {
-        allocateBuffer(image, allocation, createInfo);
+    const ResourceHandle<Image> GPUResourceManager::create(const VkImageCreateInfo& createInfo) {
+        auto [image, allocation, allocationInfo] = allocateBuffer(createInfo);
 
-        return {
+        /*return {
             make_state_array({}),
             VK_QUEUE_FAMILY_IGNORED
-        };
+        };*/
     }
 
-    const ImageState GPUResourceManager::uploadData(VkImage& image, VmaAllocation& allocation, const std::byte* src, const VkDeviceSize size, const ImageLayout& imageLayout, const VkImageCreateInfo& createInfo, const VkImageAspectFlags imageAspect) {
-        allocateBuffer(image, allocation, createInfo);
+    const ResourceHandle<Image> GPUResourceManager::create(const std::byte* src, const VkDeviceSize size, const ImageLayout& imageLayout, const VkImageCreateInfo& createInfo, const VkImageAspectFlags imageAspect) {
+        auto [image, allocation, allocationInfo] = allocateBuffer(createInfo);
 
         vk::ImageMemoryBarrier2 barrier {
             .srcStageMask           = vk::PipelineStageFlagBits2::eTransfer,    .srcAccessMask          = vk::AccessFlagBits2::eNone,
@@ -160,16 +184,16 @@ namespace Engine {
             }
         }
 
-        return {
+        /*return {
             make_state_array({ vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal }),
             createInfo.sharingMode == VkSharingMode::VK_SHARING_MODE_CONCURRENT ? 
                  VK_QUEUE_FAMILY_IGNORED :
                  Core::getInstance().getTransferQueueIndex() 
-        };
+        };*/
     }
 
-    const BufferState GPUResourceManager::uploadData(VkBuffer& buffer, VmaAllocation& allocation, const std::byte* src, const VkBufferCreateInfo& createInfo) {
-        allocateBuffer(buffer, allocation, createInfo);
+    const ResourceHandle<Buffer> GPUResourceManager::create(const std::byte* src, const VkBufferCreateInfo& createInfo) {
+        auto [buffer, allocation, allocationInfo] = allocateBuffer(createInfo);
 
         VkDeviceSize written = 0;
         
@@ -185,17 +209,53 @@ namespace Engine {
             written += chunkSize;
         }
 
-        return { vk::PipelineStageFlagBits2::eTransfer, 
+        /*return { vk::PipelineStageFlagBits2::eTransfer, 
                  vk::AccessFlagBits2::eTransferWrite,
                  createInfo.sharingMode == VkSharingMode::VK_SHARING_MODE_CONCURRENT ? 
                  VK_QUEUE_FAMILY_IGNORED :
-                 Core::getInstance().getTransferQueueIndex() };
+                 Core::getInstance().getTransferQueueIndex() };*/
     }
 
-    void GPUResourceManager::updateImageState(const SlotKey& key, const Image& image, const ImageState& newState, const CommandBuffer& commandBuffer, const uint32_t cbIdx) {
+    const ResourceHandle<Image>  GPUResourceManager::registerExternal(const VkImage& image, const VkImageAspectFlags aspectMask, const VkFormat format,
+                                                          const uint32_t width, const uint32_t height, const uint32_t depth,
+                                                          const uint32_t mipCount = 1, const uint32_t layerCount = 1,
+                                                          const VmaAllocation& allocation = VK_NULL_HANDLE) {
+        VkImageViewType viewType = depth > 1 ? VK_IMAGE_VIEW_TYPE_3D : 
+                           std::min(height, width) > 1 ? 
+                           VK_IMAGE_VIEW_TYPE_2D : VK_IMAGE_VIEW_TYPE_1D;
+            
+        VkImageViewCreateInfo viewCreateInfo {
+            .sType            = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .image            = image,
+            .viewType         = viewType,
+            .format           = format,
+            .subresourceRange = { .aspectMask = aspectMask, .baseMipLevel = 0, .levelCount = mipCount, .baseArrayLayer = 0, .layerCount = layerCount }
+        };
+
+        VkImageView view;
+        vkCreateImageView(*Core::getInstance().getDevice(), &viewCreateInfo, nullptr, &view);
+
+        const SlotKey key = images.emplace(
+            std::move(image), 
+            std::move(view),
+            std::move(viewCreateInfo.format),
+            std::move(viewCreateInfo.subresourceRange.aspectMask),
+            std::move(width), std::move(height), std::move(depth),
+            std::move(mipCount), std::move(layerCount),
+            std::move(vkuFormatComponentCount(format))
+        );
+
+        imageStates.emplace(key, make_state_array({}));
+
+        return ResourceHandle<Image>(key);
+    }
+
+    void GPUResourceManager::updateState(const SlotKey& key, const ImageState& newState, const CommandBuffer& commandBuffer, const uint32_t cbIdx) {
+        assert(images.contains(key));
+
         vk::ImageMemoryBarrier2 barrier {
-            .image                  = image.image,
-            .subresourceRange       = { .aspectMask = static_cast<vk::ImageAspectFlags>(image.aspectFlags), .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1 }
+            .image                  = images[key].image,
+            .subresourceRange       = { .aspectMask = images[key].aspect, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1 }
         };
 
         vk::DependencyInfo dependencyInfo = {
@@ -204,7 +264,7 @@ namespace Engine {
             .pImageMemoryBarriers    = &barrier
         };
 
-        for (size_t i = 0; i < image.mipCount; i++) {
+        for (size_t i = 0; i < images[key].mipCount; i++) {
             auto oldS         = imageStates[key].states[i];
             auto newS         = newState.states[i];
 
@@ -225,11 +285,11 @@ namespace Engine {
         imageStates[key] = std::move(newState); 
     }
     
-    void GPUResourceManager::updateBufferState(const SlotKey& key, const VkBuffer& buffer, const VkDeviceSize size, const VkDeviceSize offset, const BufferState& newState, const CommandBuffer& commandBuffer, const uint32_t cbIdx) {
+    void GPUResourceManager::updateState(const SlotKey& key, const VkDeviceSize size, const VkDeviceSize offset, const BufferState& newState, const CommandBuffer& commandBuffer, const uint32_t cbIdx) {
         vk::BufferMemoryBarrier2 barrier {
             .srcStageMask = bufferStates[key].currentStage, .srcAccessMask = bufferStates[key].currentAccess,
             .dstStageMask = newState.currentStage,          .dstAccessMask = newState.currentAccess,
-            .buffer = buffer, .offset = offset, .size = size
+            .buffer = buffers[key].buffer, .offset = offset, .size = size
         };
 
         vk::DependencyInfo dependencyInfo {
@@ -241,10 +301,15 @@ namespace Engine {
         commandBuffer.addBarrier(dependencyInfo, cbIdx);
     }
     
-    void GPUResourceManager::transferImageQueueFamily(const SlotKey& key, const Image& image, const ImageState& newState, const CommandBuffer& src, const CommandBuffer& dst, const uint32_t srcIdx, const uint32_t dstIdx) {
+    void GPUResourceManager::transferQueueFamily(const SlotKey& key, const ImageState& newState, const CommandBuffer& src, const CommandBuffer& dst, const uint32_t srcIdx, const uint32_t dstIdx) {
+        assert(images.contains(key));
+        assert(imageStates[key].currentQueueFamily != VK_QUEUE_FAMILY_IGNORED &&
+               newState.currentQueueFamily         != VK_QUEUE_FAMILY_IGNORED &&
+               imageStates[key].currentQueueFamily != newState.currentQueueFamily);
+
         vk::ImageMemoryBarrier2 barrier {
-            .image                  = image.image,
-            .subresourceRange       = { .aspectMask = static_cast<vk::ImageAspectFlags>(image.aspectFlags), .baseMipLevel = 0, .levelCount = image.mipCount, .baseArrayLayer = 0, .layerCount = image.layers }
+            .image                  = images[key].image,
+            .subresourceRange       = { .aspectMask = static_cast<vk::ImageAspectFlags>(images[key].aspect), .baseMipLevel = 0, .levelCount = images[key].mipCount, .baseArrayLayer = 0, .layerCount = images[key].layers }
         };
 
         vk::DependencyInfo dependencyInfo = {
@@ -254,8 +319,8 @@ namespace Engine {
         };
 
         if (imageStates[key].currentQueueFamily != newState.currentQueueFamily) {
-            barrier.subresourceRange.levelCount = image.mipCount;
-            barrier.subresourceRange.layerCount = image.layers;
+            barrier.subresourceRange.levelCount = images[key].mipCount;
+            barrier.subresourceRange.layerCount = images[key].layers;
 
             barrier.srcStageMask  = imageStates[key].states[0].stage;
             barrier.dstStageMask  = imageStates[key].states[0].stage;
@@ -269,12 +334,17 @@ namespace Engine {
         dst.addBarrier(dependencyInfo, dstIdx).submit(dstIdx);
     }
     
-    void GPUResourceManager::transferBufferQueueFamily(const SlotKey& key, const VkBuffer& buffer, const VkDeviceSize size, const VkDeviceSize offset, const BufferState& newState, const CommandBuffer& src, const CommandBuffer& dst, const uint32_t srcIdx, const uint32_t dstIdx) {
+    void GPUResourceManager::transferQueueFamily(const SlotKey& key, const VkDeviceSize size, const VkDeviceSize offset, const BufferState& newState, const CommandBuffer& src, const CommandBuffer& dst, const uint32_t srcIdx, const uint32_t dstIdx) {
+        assert(buffers.contains(key));
+        assert(bufferStates[key].currentQueueFamily != VK_QUEUE_FAMILY_IGNORED &&
+               newState.currentQueueFamily          != VK_QUEUE_FAMILY_IGNORED &&
+               bufferStates[key].currentQueueFamily != newState.currentQueueFamily);
+
         vk::BufferMemoryBarrier2 barrier {
             .srcStageMask = bufferStates[key].currentStage, .srcAccessMask = bufferStates[key].currentAccess,
             .dstStageMask = bufferStates[key].currentStage, .dstAccessMask = bufferStates[key].currentAccess,
             .srcQueueFamilyIndex = bufferStates[key].currentQueueFamily, .dstQueueFamilyIndex = newState.currentQueueFamily,
-            .buffer = buffer, .offset = offset, .size = size
+            .buffer = buffers[key].buffer, .offset = offset, .size = size
         };
 
         vk::DependencyInfo dependencyInfo {

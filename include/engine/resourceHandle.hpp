@@ -16,8 +16,9 @@ namespace Engine {
             ~ResourceHandle() noexcept;
 
             const ResourceHandle& operator=(std::nullptr_t) noexcept;
-            const ResourceHandle& operator=(const ResourceHandle& rhs) = delete;
+            ResourceHandle& operator=(const ResourceHandle& rhs) noexcept;
             ResourceHandle& operator=(ResourceHandle&& rhs) noexcept;
+            const ResourceHandle& operator=(const ResourceHandle& rhs) = delete;
 
             const SlotKey& key() const noexcept;
             const ResourceState& state() const noexcept;
