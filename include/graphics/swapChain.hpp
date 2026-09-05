@@ -12,12 +12,8 @@
 
 #include <engine/resources.hpp>
 
-using std::vector;
-using std::move;
-using std::swap;
-
 using Engine::ResourceHandle;
-using Engine::Resources::Image;
+using Engine::Resources::GPU::Image;
 
 namespace Graphics {
     class SwapChain {
@@ -46,8 +42,8 @@ namespace Graphics {
             const vk::ResultValue<uint32_t> acquireNextImage(uint64_t timeout, const vk::raii::Semaphore &semaphore, const vk::raii::Fence &fence) const;  
         
         private:
-            vk::raii::SwapchainKHR            swapChain = nullptr;
-            vector<ResourceHandle<Image>>     images;
+            vk::raii::SwapchainKHR             swapChain = nullptr;
+            std::vector<ResourceHandle<Image>> images;
 
             vk::SurfaceFormatKHR              swapChainSurfaceFormat;
             vk::Extent2D                      swapChainExtent;

@@ -15,7 +15,7 @@
 
 using Engine::Resources::Model;
 using Engine::Resources::Mesh;
-using Engine::Resources::Image;
+using Engine::Resources::GPU::Image;
 using Engine::Resources::Texture;
 using Engine::ResourceHandle;
 

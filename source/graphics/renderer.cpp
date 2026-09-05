@@ -7,13 +7,13 @@
 #include <experimental/array>
 
 #include <engine/resourceEngine.hpp>
-#include <engine/gpuResourceManager.hpp>
 
 #include <engine/factory.hpp>
 
 using Engine::ResourceManager;
 using Engine::GPUResourceManager;
 
+using namespace Engine::Resources::GPU;
 using namespace Engine::Factory::ImageFTY;
 
 using std::experimental::make_array;
@@ -36,15 +36,15 @@ namespace Graphics {
         //computePipeline  = Pipeline::createComputePipeline(core.getDevice());
         renderPass       = CommandBuffer(core.getGraphicsCommandPool(), &core.getGraphicsQueue(), vk::CommandBufferLevel::ePrimary, Models::MAX_FRAMES_IN_FLIGHT);
 
-        auto [resolveInfo, rAspect] = createColorResolveAttachment(swapChain.getExtent().width, swapChain.getExtent().height, static_cast<VkFormat>(swapChain.getSurfaceFormat().format));
-        auto [depthInfo,   dAspect] = createDepthAttachment(swapChain.getExtent().width, swapChain.getExtent().height, static_cast<VkFormat>(core.findDepthFormat()));
+        auto [resolveInfo, rAspect] = createColorResolveAttachmentInfo(swapChain.getExtent().width, swapChain.getExtent().height, static_cast<VkFormat>(swapChain.getSurfaceFormat().format));
+        auto [depthInfo,   dAspect] = createDepthAttachmentInfo(swapChain.getExtent().width, swapChain.getExtent().height, static_cast<VkFormat>(core.findDepthFormat()));
 
-        colorResolve = ResourceHandle<Image>(ResourceManager::getInstance().createImage(
-            "ResolveAttachment", resolveInfo, rAspect
+        colorResolve = ResourceHandle<Image>(GPUResourceManager::getInstance().create(
+            resolveInfo, rAspect
         ));
         
-        depthBuffer  = ResourceHandle<Image>(ResourceManager::getInstance().createImage(
-            "DepthBuffer", depthInfo, dAspect
+        depthBuffer  = ResourceHandle<Image>(GPUResourceManager::getInstance().create(
+            depthInfo, dAspect
         ));
         
         std::string modelPath   = (Runtime::FileHelper::getExecutablePath() / Engine::Paths::MODELS / "viking_room.glb").string();
@@ -52,7 +52,7 @@ namespace Graphics {
         model = ResourceHandle<Model>(ResourceManager::getInstance().load<Model>(modelPath));
         modelTexture = ResourceHandle<Texture>(ResourceManager::getInstance().load<Texture>(texturePath));
 
-        GPUResourceManager::getInstance().transferResourceQueueFamily<Image, ImageState>(
+        GPUResourceManager::getInstance().transferQueueFamily(
             modelTexture.data().image, 
             { .currentQueueFamily = core.getGraphicsQueueIndex() }, 
             CommandBuffer::singleTimeTransfer(), CommandBuffer::singleTimeGraphics()
@@ -60,7 +60,7 @@ namespace Graphics {
 
         auto cbGraphics = CommandBuffer::singleTimeGraphics();
 
-        GPUResourceManager::getInstance().updateResourceState<Image, ImageState>(
+        GPUResourceManager::getInstance().setBarrier(
             modelTexture.data().image,
             { make_state_array(
              { vk::PipelineStageFlagBits2::eFragmentShader,
@@ -148,7 +148,7 @@ namespace Graphics {
             swapChain.getImage(imageIndex), {}
         );
 
-        GPUResourceManager::getInstance().updateState(
+        GPUResourceManager::getInstance().setBarrier(
             swapChain.getImage(imageIndex),
             { { vk::PipelineStageFlagBits2::eColorAttachmentOutput, 
                 vk::AccessFlagBits2::eColorAttachmentWrite, 
@@ -159,7 +159,7 @@ namespace Graphics {
 
         vk::PipelineStageFlags2 depthStageFlags = vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests;
         
-        GPUResourceManager::getInstance().updateState(
+        GPUResourceManager::getInstance().setBarrier(
             colorResolve,
             { { vk::PipelineStageFlagBits2::eColorAttachmentOutput, 
                 vk::AccessFlagBits2::eColorAttachmentWrite, 
@@ -168,7 +168,7 @@ namespace Graphics {
             renderPass, frameIndex
         );
         
-        GPUResourceManager::getInstance().updateState(
+        GPUResourceManager::getInstance().setBarrier(
             depthBuffer,
             { { depthStageFlags ,
                 vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
@@ -227,12 +227,13 @@ namespace Graphics {
 
         renderPass[frameIndex].bindDescriptorSets(vk::PipelineBindPoint::eGraphics, graphicsPipeline.getPipelineLayout(), 0, *graphicsPipeline.getDescriptorSet(frameIndex), nullptr);
     
-        const VkBuffer& vertexBuffer = mesh.vertexBuffer;
-        const VkBuffer& indexBuffer  = mesh.indexBuffer;
+        const VkBuffer& vertexBuffer = mesh.vertexHandle.data().buffer;
         
         renderPass[frameIndex].bindVertexBuffers(0, { vertexBuffer }, {0});
 
         if (mesh.indexCount > 0) {
+            const VkBuffer& indexBuffer  = mesh.indexHandle.data().buffer;
+
             renderPass[frameIndex].bindIndexBuffer({ indexBuffer }, 0, mesh.indexType);
             renderPass[frameIndex].drawIndexed(mesh.indexCount, 1, 0, 0, 0);
         } else {
@@ -243,7 +244,7 @@ namespace Graphics {
         //renderPass[frameIndex].drawIndexed(static_cast<uint32_t>(mesh.indexCount), 1, 0, 0, 0);
         renderPass[frameIndex].endRendering();
 
-        GPUResourceManager::getInstance().updateResourceState<Image, ImageState>(
+        GPUResourceManager::getInstance().setBarrier(
             swapChain.getImage(imageIndex),
             { { vk::PipelineStageFlagBits2::eBottomOfPipe, 
                 vk::AccessFlagBits2::eNone, 
@@ -276,16 +277,16 @@ namespace Graphics {
             swapChain    = SwapChain(swapChain, surface, physicalDevice, device);
 
             {
-                auto [rInfo, rAspect] = createColorResolveAttachment(
+                auto [rInfo, rAspect] = createColorResolveAttachmentInfo(
                     swapChain.getExtent().width, swapChain.getExtent().height, static_cast<VkFormat>(swapChain.getSurfaceFormat().format)
                 );
 
-                auto [dInfo, dAspect] = createDepthAttachment(
+                auto [dInfo, dAspect] = createDepthAttachmentInfo(
                     swapChain.getExtent().width, swapChain.getExtent().height, static_cast<VkFormat>(Core::getInstance().findDepthFormat())
                 );
 
-                colorResolve.recreate(rInfo, rAspect);            
-                depthBuffer.recreate(dInfo, dAspect);
+                colorResolve = GPUResourceManager::getInstance().create(rInfo, rAspect);            
+                depthBuffer  = GPUResourceManager::getInstance().create(dInfo, dAspect);
             }
             
             return;
@@ -368,16 +369,16 @@ namespace Graphics {
                 device.waitIdle(); // Wait until resource is no longer being used before recreating
                 swapChain    = SwapChain(swapChain, surface, physicalDevice, device);
                 {
-                    auto [rInfo, rAspect] = createColorResolveAttachment(
+                    auto [rInfo, rAspect] = createColorResolveAttachmentInfo(
                         swapChain.getExtent().width, swapChain.getExtent().height, static_cast<VkFormat>(swapChain.getSurfaceFormat().format)
                     );
 
-                    auto [dInfo, dAspect] = createDepthAttachment(
+                    auto [dInfo, dAspect] = createDepthAttachmentInfo(
                         swapChain.getExtent().width, swapChain.getExtent().height, static_cast<VkFormat>(Core::getInstance().findDepthFormat())
                     );
 
-                    colorResolve.recreate(rInfo, rAspect);            
-                    depthBuffer.recreate(dInfo, dAspect);
+                    colorResolve = GPUResourceManager::getInstance().create(rInfo, rAspect);            
+                    depthBuffer  = GPUResourceManager::getInstance().create(dInfo, dAspect);   
                 }
                 break;
             default:

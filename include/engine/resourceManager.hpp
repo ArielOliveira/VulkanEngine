@@ -45,23 +45,20 @@ namespace Engine {
 
             ~ResourceManager();
 
-            const ResourceHandle<Image> createImage(const std::string& name, const TextureAsset& textureMetaData, const VkImageCreateInfo& imageCreateInfo, const VkImageAspectFlags imageAspect);
-            const ResourceHandle<Image> createImage(const std::string& name, const VkImageCreateInfo& imageCreateInfo, const VkImageAspectFlags imageAspect); 
-
-            void recreate(const ResourceHandle<Image>& handle, const VkImageCreateInfo& imageCreateInfo, const VkImageAspectFlags imageAspect, const PassKey<ResourceHandle<Image>>&);
+            //void recreate(const ResourceHandle<Image>& handle, const VkImageCreateInfo& imageCreateInfo, const VkImageAspectFlags imageAspect, const PassKey<ResourceHandle<Image>>&);
 
             template <typename Resource>
-            const ResourceHandle<Resource> load(const std::string& path);
+            ResourceHandle<Resource> load(const std::string& path);
 
             template <typename Resource>
-            const ResourceHandle<Resource> load(const std::string& sourceName, const Asset& asset, const size_t resourceIndex);
+            ResourceHandle<Resource> load(const std::string& sourceName, const Asset& asset, const size_t resourceIndex);
 
-            const ResourceHandle<Image> registerExternal(
+            /*const ResourceHandle<Image> registerExternal(
                 const std::string& name, const VkImage& image, const VkImageAspectFlags imageAspect, const VkFormat format,
                 const uint32_t width, const uint32_t height, const uint32_t depth,
                 const uint32_t mipCount = 1, const uint32_t layerCount = 1,
                 const ImageState& state = { make_state_array({}), VK_QUEUE_FAMILY_IGNORED },
-                const VmaAllocation& allocation = VK_NULL_HANDLE);
+                const VmaAllocation& allocation = VK_NULL_HANDLE);*/
 
             template <typename Resource>
             void acquire(const SlotKey& key, const PassKey<ResourceHandle<Resource>>&);
@@ -79,22 +76,7 @@ namespace Engine {
             const ResourceState& getState(const SlotKey& key, const PassKey<ResourceHandle<Resource>>&) const;
         
         private:
-            template <typename... ResourceTypes>
-            struct Pools {
-                std::tuple<SlotMap<ResourceTypes, ResourceSlot>...> pools;
-
-                template<typename T>
-                SlotMap<T, ResourceSlot>& get() {
-                    return std::get<SlotMap<T, ResourceSlot>>(pools);
-                }
-
-                template<typename T>
-                const SlotMap<T, ResourceSlot>& get() const {
-                    return std::get<SlotMap<T, ResourceSlot>>(pools);
-                }
-            };
-
-            using ResourcesPool = Pools<Model, Scene, Mesh, Material, Shader, Texture, Image, Animation>;
+            using ResourcesPool = Pools<Model, Scene, Mesh, Material, Shader, Texture, Animation>;
 
             ResourceManager();
 

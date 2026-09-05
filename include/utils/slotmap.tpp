@@ -5,37 +5,32 @@
 #include <cassert>
 
 namespace Utils {
-    template <typename T, typename Slot>
-    SlotMap<T, Slot>::SlotMap(uint32_t allocationChunkSize, bool allowReallocation) {
-        allocationChunkSize = std::max(allocationChunkSize, MIN_ALLOCATION_CHUNK);
+    template <typename T, typename Slot, size_t PageSize, bool AllowReallocation>
+    SlotMap<T, Slot, PageSize, AllowReallocation>::SlotMap() {
+        data.reserve(PageSize);
+        eraseTable.reserve(PageSize);
+        slots.reserve(PageSize);
 
-        this->allocationChunkSize = allocationChunkSize;
-        this->allowReallocation   = allowReallocation;
-
-        data.reserve(allocationChunkSize);
-        eraseTable.reserve(allocationChunkSize);
-        slots.reserve(allocationChunkSize);
-
-        for (uint32_t i = 0; i < allocationChunkSize-1U; i++) 
+        for (uint32_t i = 0; i < PageSize-1U; i++) 
             slots.emplace_back( Slot { i+1U, 0 }); // next available slot
 
         slots.emplace_back( Slot { ~0U, 0 });
 
         freeHead              = 0;
-        freeTail              = allocationChunkSize-1U;
+        freeTail              = PageSize-1U;
     }
 
-    template <typename T, typename Slot>
-    SlotMap<T, Slot>::~SlotMap() {}
+    template <typename T, typename Slot, size_t PageSize, bool AllowReallocation>
+    SlotMap<T, Slot, PageSize, AllowReallocation>::~SlotMap() {}
 
-    template <typename T, typename Slot>
+    template <typename T, typename Slot, size_t PageSize, bool AllowReallocation>
     template <typename... Args>
-    const SlotKey SlotMap<T, Slot>::emplace(Args&&... args) {
+    const SlotKey SlotMap<T, Slot, PageSize, AllowReallocation>::emplace(Args&&... args) {
         if (freeHead == ~0U) {
-            if (allowReallocation)
+            if constexpr (AllowReallocation)
                 reallocate();
             else
-                return { ~0U, ~0U };
+                throw std::runtime_error("Attempting to allocate on filled SlotMap with AllowReallocation = false");
         }
         
         uint32_t slotKey = popFreeList();
@@ -47,8 +42,8 @@ namespace Utils {
         return { slotKey, slots[slotKey].generations };
     }
 
-    template <typename T, typename Slot>
-    void SlotMap<T, Slot>::erase(const SlotKey &key) {
+    template <typename T, typename Slot, size_t PageSize, bool AllowReallocation>
+    void SlotMap<T, Slot, PageSize, AllowReallocation>::erase(const SlotKey &key) {
         if (key.index < 0 || key.index >= slots.size())
             throw std::runtime_error("Index out of bounds!");
 
@@ -69,10 +64,12 @@ namespace Utils {
         pushFreeList(key.index);
     }
 
-    template <typename T, typename Slot>
-    void SlotMap<T, Slot>::reallocate() {
+    template <typename T, typename Slot, size_t PageSize, bool AllowReallocation>
+    void SlotMap<T, Slot, PageSize, AllowReallocation>::reallocate() {
+        static_assert(AllowReallocation, "Trying to reallocate on locked SlotMap");
+
         uint32_t oldSize = static_cast<uint32_t>(slots.size());
-        uint32_t newSize = oldSize + allocationChunkSize;
+        uint32_t newSize = oldSize + PageSize;
 
         data.reserve(newSize);
         eraseTable.reserve(newSize);
@@ -91,16 +88,16 @@ namespace Utils {
         freeTail = newSize-1U;
     }
 
-    template <typename T, typename Slot>
-    const uint32_t SlotMap<T, Slot>::popFreeList() noexcept {
+    template <typename T, typename Slot, size_t PageSize, bool AllowReallocation>
+    const uint32_t SlotMap<T, Slot, PageSize, AllowReallocation>::popFreeList() noexcept {
         uint32_t slotKey = freeHead;    
         freeHead = slots[freeHead].index;
 
         return slotKey;
     }
 
-    template <typename T, typename Slot>
-    void SlotMap<T, Slot>::pushFreeList(const uint32_t keyIndex) noexcept {
+    template <typename T, typename Slot, size_t PageSize, bool AllowReallocation>
+    void SlotMap<T, Slot, PageSize, AllowReallocation>::pushFreeList(const uint32_t keyIndex) noexcept {
         uint32_t previousTail = freeTail;
         freeTail = keyIndex;
 
@@ -112,48 +109,48 @@ namespace Utils {
         slots[freeTail].index = ~0U;
     }
 
-    template <typename T, typename Slot>
-    Slot& SlotMap<T, Slot>::getSlot(const SlotKey& key) { 
+    template <typename T, typename Slot, size_t PageSize, bool AllowReallocation>
+    Slot& SlotMap<T, Slot, PageSize, AllowReallocation>::getSlot(const SlotKey& key) { 
         assert(key.index >= 0 && !(key.index >= slots.size()));
         assert(key.generations == slots[key.index].generations);
 
         return slots[key.index]; 
     }
 
-    template <typename T, typename Slot>
-    const Slot& SlotMap<T, Slot>::getSlot(const SlotKey& key) const {
+    template <typename T, typename Slot, size_t PageSize, bool AllowReallocation>
+    const Slot& SlotMap<T, Slot, PageSize, AllowReallocation>::getSlot(const SlotKey& key) const {
         assert(key.index >= 0 && !(key.index >= slots.size()));
         assert(key.generations == slots[key.index].generations);
 
         return slots[key.index]; 
     }
 
-    template <typename T, typename Slot>
-    const bool SlotMap<T, Slot>::contains(const SlotKey& key) const {
+    template <typename T, typename Slot, size_t PageSize, bool AllowReallocation>
+    const bool SlotMap<T, Slot, PageSize, AllowReallocation>::contains(const SlotKey& key) const {
         return key.index >= 0 && 
                key.index < slots.size() && 
                slots[key.index].generations == key.generations;
     }
 
-    template <typename T, typename Slot>
-    const T* SlotMap<T, Slot>::getData() const { return data.data(); }
+    template <typename T, typename Slot, size_t PageSize, bool AllowReallocation>
+    const T* SlotMap<T, Slot, PageSize, AllowReallocation>::getData() const { return data.data(); }
 
-    template <typename T, typename Slot>
-    const size_t SlotMap<T, Slot>::size() const { return data.size(); }
+    template <typename T, typename Slot, size_t PageSize, bool AllowReallocation>
+    const size_t SlotMap<T, Slot, PageSize, AllowReallocation>::size() const { return data.size(); }
 
-    template <typename T, typename Slot>
-    const size_t SlotMap<T, Slot>::capacity() const { return data.capacity(); }
+    template <typename T, typename Slot, size_t PageSize, bool AllowReallocation>
+    const size_t SlotMap<T, Slot, PageSize, AllowReallocation>::capacity() const { return data.capacity(); }
 
-    template <typename T, typename Slot>
-    const T& SlotMap<T, Slot>::operator[](const SlotKey& key) const {
+    template <typename T, typename Slot, size_t PageSize, bool AllowReallocation>
+    const T& SlotMap<T, Slot, PageSize, AllowReallocation>::operator[](const SlotKey& key) const {
         assert(key.index >= 0 && !(key.index >= slots.size()));
         assert(key.generations == slots[key.index].generations);
 
         return data[slots[key.index].index];
     }
 
-    template <typename T, typename Slot>
-    T& SlotMap<T, Slot>::operator[](const SlotKey& key) {
+    template <typename T, typename Slot, size_t PageSize, bool AllowReallocation>
+    T& SlotMap<T, Slot, PageSize, AllowReallocation>::operator[](const SlotKey& key) {
         assert(key.index >= 0 && !(key.index >= slots.size()));
         assert(key.generations == slots[key.index].generations);
 

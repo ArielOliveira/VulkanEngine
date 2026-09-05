@@ -2,7 +2,7 @@
 
 #include <engine/resourceEngine.hpp>
 
-using Engine::ResourceManager;
+using Engine::GPUResourceManager;
 
 namespace Graphics {
     SwapChain::SwapChain(const vk::raii::SurfaceKHR& surface, const vk::raii::PhysicalDevice &physicalDevice, const vk::raii::Device &device) {
@@ -40,8 +40,8 @@ namespace Graphics {
             .oldSwapchain       = nullptr
         };
 
-        swapChain       = vk::raii::SwapchainKHR(device, swapChainCreateInfo);
-        vector<vk::Image> swapChainImages = swapChain.getImages();
+        swapChain                              = vk::raii::SwapchainKHR(device, swapChainCreateInfo);
+        std::vector<vk::Image> swapChainImages = swapChain.getImages();
 
         // Register images to resource manager
         assert(images.empty());
@@ -49,8 +49,7 @@ namespace Graphics {
         images.reserve(swapChainImages.size());
         uint32_t imageId = 0;
         for (auto &image : swapChainImages) {
-            images.emplace_back(std::move(ResourceManager::getInstance().registerExternal(
-                std::string("swapChain#" + std::to_string(imageId++)),
+            images.emplace_back(std::move(GPUResourceManager::getInstance().registerExternal(
                 static_cast<VkImage>(image),
                 VkImageAspectFlagBits::VK_IMAGE_ASPECT_COLOR_BIT,
                 static_cast<VkFormat>(swapChainSurfaceFormat.format),

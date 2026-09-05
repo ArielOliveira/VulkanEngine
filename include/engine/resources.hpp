@@ -66,8 +66,8 @@ namespace Engine::Resources {
     struct Mesh {
         std::string name;
 
-        ResourceHandle<GPU::Buffer> vertexBuffer;
-        ResourceHandle<GPU::Buffer> indexBuffer;
+        ResourceHandle<GPU::Buffer> vertexHandle;
+        ResourceHandle<GPU::Buffer> indexHandle;
         
         vk::IndexType indexType;
 
@@ -96,6 +96,21 @@ namespace Engine::Resources {
         std::string                   name;
         
         vector<ResourceHandle<Scene>> scenes;
+    };
+
+    template <typename... ResourceTypes>
+    struct Pools {
+        std::tuple<Utils::SlotMap<ResourceTypes, Utils::Types::ResourceSlot>...> pools;
+
+        template<typename T>
+        Utils::SlotMap<T, Utils::Types::ResourceSlot>& get() {
+            return std::get<Utils::SlotMap<T, Utils::Types::ResourceSlot>>(pools);
+        }
+
+        template<typename T>
+        const Utils::SlotMap<T, Utils::Types::ResourceSlot>& get() const {
+            return std::get<Utils::SlotMap<T, Utils::Types::ResourceSlot>>(pools);
+        }
     };
 }
 
@@ -131,33 +146,6 @@ namespace Engine::Resources::Trackers {
         
         return stateArr;
     }
-}
-
-namespace Engine::Resources::Traits {
-    template <typename... Ts>
-    struct TypeList {};
-
-    using GpuResourceTypes = TypeList<GPU::Buffer, GPU::Image>;
-
-    template <typename T, typename List>
-    struct TypeListContains;
-
-    template <typename T, typename... Ts>
-    struct TypeListContains<T, TypeList<Ts...>>
-        : std::disjunction<std::is_same<T, Ts>...> {};
-
-    template <typename T>
-    inline constexpr bool is_gpu_resource_v = TypeListContains<T, GpuResourceTypes>::value;
-
-    template <typename T>
-    struct ResourceTraits {
-        static auto& manager() {
-            if constexpr (is_gpu_resource_v<T>)
-                return GPUResourceManager::instance();
-            else
-                return ResourceManager::instance();
-        }
-    };
 }
 
 #endif

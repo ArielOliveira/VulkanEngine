@@ -1,7 +1,6 @@
 #ifndef ENGINE_RESOURCE_MANAGER_TPP
 #define ENGINE_RESOURCE_MANAGER_TPP
 
-#include <engine/gpuResourceManager.hpp>
 #include <engine/resourceManager.hpp>
 
 #include <graphics/core.hpp>
@@ -11,7 +10,7 @@ using Graphics::Core;
 
 namespace Engine {
     template<>
-    inline const ResourceHandle<Texture> ResourceManager::load<Texture>(const std::string& path) {
+    inline ResourceHandle<Texture> ResourceManager::load<Texture>(const std::string& path) {
         assert(findKeyByName(std::type_index(typeid(Texture)), path) == nullptr);
 
         std::cout << "Loading texture " << path << '\n';
@@ -40,7 +39,9 @@ namespace Engine {
             .sharingMode   = VK_SHARING_MODE_EXCLUSIVE
         };
       
-        ResourceHandle<Image> imageHandle = createImage(path, textureAsset, imageCreateInfo, VK_IMAGE_ASPECT_COLOR_BIT);
+        ResourceHandle<Image> imageHandle = GPUResourceManager::getInstance().create(
+            textureAsset.data, textureAsset.dataSize, textureAsset.layout, 
+            imageCreateInfo, VK_IMAGE_ASPECT_COLOR_BIT);
         
         vk::PhysicalDeviceProperties properties = Core::getInstance().getPhysicalDevice().getProperties();
 
@@ -69,12 +70,13 @@ namespace Engine {
         FileParser::closeTextureFile(fileHandle);
 
         std::cout << "Registering texture " << path.c_str() << '\n';
-        std::string resourceName = path + "#" + "texture";
-        SlotKey key = pools.get<Texture>().emplace(std::move( Texture{
-            .name       = resourceName,
-            .image      = std::move(imageHandle),
-            .sampler    = sampler
-        }));
+        std::string resourceName = path;
+        
+        SlotKey key = pools.get<Texture>().emplace(Texture {
+            std::move(std::string(resourceName)),
+            std::move(imageHandle),
+            std::move(sampler)
+        });
         
         cache[std::type_index(typeid(Texture))][resourceName] = key;
 
@@ -82,12 +84,12 @@ namespace Engine {
     }
 
     template<>
-    inline const ResourceHandle<Texture> ResourceManager::load<Texture>(const std::string& sourceName, const Asset& asset, const size_t resourceIndex) {
+    inline ResourceHandle<Texture> ResourceManager::load<Texture>(const std::string& sourceName, const Asset& asset, const size_t resourceIndex) {
         return nullptr;
     }
 
     template<>
-    inline const ResourceHandle<Mesh> ResourceManager::load<Mesh>(const std::string& sourceName, const Asset& asset, const size_t resourceIndex) {
+    inline ResourceHandle<Mesh> ResourceManager::load<Mesh>(const std::string& sourceName, const Asset& asset, const size_t resourceIndex) {
         auto& meshR = asset.meshes[resourceIndex];
         std::string resourceName = sourceName + "#" + std::string(meshR.name.c_str());
         
@@ -95,19 +97,15 @@ namespace Engine {
 
         std::cout << "Loading mesh " << resourceName << '\n';
         
-        // Setup mesh data
-        Mesh mesh = {
-            .name           = resourceName,
-            .smIndexOffset  = std::vector<uint32_t>(),
-            .smIndexCount   = std::vector<uint32_t>(),
-            .smVertexOffset = std::vector<uint32_t>(),
-            .smMaterials    = std::vector<ResourceHandle<Material>>()
-        };
-
-        mesh.smIndexOffset.reserve(meshR.primitives.size());
-        mesh.smIndexCount.reserve(meshR.primitives.size());
-        mesh.smVertexOffset.reserve(meshR.primitives.size());
-        mesh.smMaterials.reserve(meshR.primitives.size());
+        std::vector<uint32_t>                 indicesOffset;
+        std::vector<uint32_t>                 indicesCount;
+        std::vector<uint32_t>                 verticesOffset;
+        std::vector<ResourceHandle<Material>> materials;
+        
+        indicesOffset.reserve(meshR.primitives.size());
+        indicesCount.reserve(meshR.primitives.size());
+        verticesOffset.reserve(meshR.primitives.size());
+        materials.reserve(meshR.primitives.size());
         
         size_t vertexCount  = 0;
         size_t indexCount   = 0;
@@ -127,10 +125,6 @@ namespace Engine {
             if (indicesAccessor)
                 indexCount += indicesAccessor->count;
         }
-
-        mesh.vertexCount = vertexCount;
-        mesh.indexCount  = indexCount;
-        mesh.indexType   = vk::IndexType::eUint32;
         
         std::vector<Graphics::Models::Vertex> vertices;
         std::vector<uint32_t> indices;
@@ -183,45 +177,54 @@ namespace Engine {
                     indices.push_back(index);
                 });
                 
-                mesh.smIndexCount.push_back(static_cast<uint32_t>(indicesAccessor->count));
-                mesh.smIndexOffset.push_back(static_cast<uint32_t>(indexOffset));
+                indicesCount.push_back(static_cast<uint32_t>(indicesAccessor->count));
+                indicesOffset.push_back(static_cast<uint32_t>(indexOffset));
                 indexOffset  += indices.size();
             }
 
-            mesh.smVertexOffset.push_back(static_cast<uint32_t>(vertexOffset));
+            verticesOffset.push_back(static_cast<uint32_t>(vertexOffset));
             
             vertexOffset += vertices.size();
         }
 
-        mesh.vtxBufferSize = sizeof(vertices[0]) * vertices.size();
-        mesh.idxBufferSize = sizeof(indices[0])  * indices.size();
+        VkDeviceSize vertexBufferSize = sizeof(vertices[0]) * vertices.size();
+        VkDeviceSize indexBufferSize  = sizeof(indices[0])  * indices.size();
 
-        std::cout << "Mesh " << resourceName << " has " << vertices.size() << "|" << mesh.vertexCount << " vertices" << '\n';
+        std::cout << "Mesh " << resourceName << " has " << vertices.size() << "|" << vertexCount << " vertices" << '\n';
 
         VkBufferCreateInfo createInfo {
             .sType        = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .size         = mesh.vtxBufferSize,
+            .size         = vertexBufferSize,
             .usage        = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
             .sharingMode  = VK_SHARING_MODE_EXCLUSIVE
         };
 
-        GPUResourceManager::getInstance().uploadData(
-                        mesh.vertexBuffer, mesh.vertexAllocation, 
+        auto vertexHandle = GPUResourceManager::getInstance().create( 
                         reinterpret_cast<std::byte*>(vertices.data()),
                         createInfo);
+
+        ResourceHandle<GPU::Buffer> indexHandle = nullptr;
         
         if (indices.size() > 0) {
-            createInfo.size  = mesh.idxBufferSize;
+            createInfo.size  = indexBufferSize;
             createInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
 
-            GPUResourceManager::getInstance().uploadData(
-                            mesh.indexBuffer, mesh.indexAllocation, 
+        auto indexHandle = GPUResourceManager::getInstance().create(
                             reinterpret_cast<std::byte*>(indices.data()), 
                             createInfo);
         }
 
         std::cout << "Registering mesh " << resourceName.c_str() << '\n';
-        SlotKey key = pools.get<Mesh>().emplace(std::move(mesh));
+        SlotKey key = pools.get<Mesh>().emplace(Mesh {
+            std::move(std::string(resourceName)),
+            std::move(vertexHandle), 
+            std::move(indexHandle),
+            vk::IndexType::eUint32,
+            static_cast<uint32_t>(vertexCount), static_cast<uint32_t>(indexCount),
+            std::move(indicesOffset), std::move(indicesCount),
+            std::move(verticesOffset),
+            std::move(materials)
+        });
         
         cache[std::type_index(typeid(Mesh))][resourceName] = key;
 
@@ -229,7 +232,7 @@ namespace Engine {
     }
 
     template<>
-    inline const ResourceHandle<Scene> ResourceManager::load<Scene>(const std::string& sourceName, const Asset& asset, const size_t resourceIndex) {
+    inline ResourceHandle<Scene> ResourceManager::load<Scene>(const std::string& sourceName, const Asset& asset, const size_t resourceIndex) {
         auto& sceneStr = asset.scenes[resourceIndex];
         std::string resourceName =  std::string(sourceName.c_str()) + "#" + std::string(sceneStr.name.c_str());
 
@@ -239,18 +242,15 @@ namespace Engine {
 
         size_t nodeCount = sceneStr.nodeIndices.size();
         
-        Scene scene = {
-            .name       = resourceName,
-            .nodeNames  = std::vector<std::string>(),
-            .hierarchy  = std::vector<uint32_t>(),
-            .transforms = std::vector<glm::mat4x4>(),
-            .meshes     = std::vector<std::pair<ResourceHandle<Mesh>, uint32_t>>(),
-            .animations = std::vector<std::pair<ResourceHandle<Animation>, uint32_t>>()
-        };
+        std::vector<std::string>                                    nodeNames;
+        std::vector<uint32_t>                                       hierarchy;
+        std::vector<glm::mat4x4>                                    transforms;
+        std::vector<std::pair<ResourceHandle<Mesh>, uint32_t>>      meshes;
+        std::vector<std::pair<ResourceHandle<Animation>, uint32_t>> animations;
 
-        scene.nodeNames.reserve(nodeCount);
-        scene.hierarchy.reserve(nodeCount);
-        scene.transforms.reserve(nodeCount);
+        nodeNames.reserve(nodeCount);
+        hierarchy.reserve(nodeCount);
+        transforms.reserve(nodeCount);
         
         std::stack<std::tuple<size_t, std::optional<size_t>, uint32_t>> nodeStack;
             
@@ -262,17 +262,17 @@ namespace Engine {
             auto& node                              = asset.nodes[current];
             nodeStack.pop();
 
-            scene.nodeNames.emplace_back(node.name.c_str());
-            scene.hierarchy.push_back(hierarchyLayer-1);
-            scene.transforms.emplace_back(glm::make_mat4x4(fastgltf::getTransformMatrix(node).data()));
+            nodeNames.emplace_back(node.name.c_str());
+            hierarchy.push_back(hierarchyLayer-1);
+            transforms.emplace_back(glm::make_mat4x4(fastgltf::getTransformMatrix(node).data()));
 
             if (node.meshIndex.has_value()) {
                 std::string meshName = sourceName + "#" + std::string(asset.meshes[node.meshIndex.value()].name.c_str());
                 
                 if (SlotKey* key = findKeyByName(std::type_index(typeid(Mesh)), meshName); key == nullptr) {
-                    scene.meshes.emplace_back(load<Mesh>(sourceName, asset, node.meshIndex.value()), static_cast<uint32_t>(scene.hierarchy.size())-1);
+                    meshes.emplace_back(std::move(load<Mesh>(sourceName, asset, node.meshIndex.value())), std::move(static_cast<uint32_t>(hierarchy.size())-1));
                 } else {
-                    scene.meshes.emplace_back(*key, static_cast<uint32_t>(scene.hierarchy.size())-1);
+                    meshes.emplace_back(*key, static_cast<uint32_t>(hierarchy.size())-1);
                 }
             }
                 
@@ -281,7 +281,11 @@ namespace Engine {
         }
 
         std::cout << "Registering scene " << resourceName.c_str() << '\n';
-        SlotKey key = pools.get<Scene>().emplace(std::move(scene));
+        SlotKey key = pools.get<Scene>().emplace(Scene {
+            std::move(std::string(resourceName)),
+            std::move(nodeNames), std::move(hierarchy), std::move(transforms),
+            std::move(meshes), std::move(animations)
+        });
         
         cache[std::type_index(typeid(Scene))][resourceName] = key;
 
@@ -289,28 +293,28 @@ namespace Engine {
     }
 
     template<>
-    inline const ResourceHandle<Model> ResourceManager::load<Model>(const std::string& path) {
+    inline ResourceHandle<Model> ResourceManager::load<Model>(const std::string& path) {
         assert(findKeyByName(std::type_index(typeid(Model)), path) == nullptr);
 
         std::cout << "Loading model: " << path << '\n';
     
         auto [parser, asset, fileName] = FileParser::openModelFile(path);
 
-        Model model = {
-            .name       = fileName.c_str(),
-            .scenes     = std::vector<ResourceHandle<Scene>>()
-        };
+        std::string resourceName = fileName.c_str();        
+        std::vector<ResourceHandle<Scene>> scenes;
 
-        model.scenes.reserve(asset.get().scenes.size());
+        scenes.reserve(asset.get().scenes.size());
         
-        for (size_t sceneIndex = 0; sceneIndex < asset.get().scenes.size(); sceneIndex++) {
-            model.scenes.emplace_back(load<Scene>(fileName, asset.get(), sceneIndex));
-        }
+        for (size_t sceneIndex = 0; sceneIndex < asset.get().scenes.size(); sceneIndex++) 
+            scenes.emplace_back(std::move(load<Scene>(resourceName, asset.get(), sceneIndex)));
 
         std::cout << "Registering model " << path << '\n';
-        SlotKey key = pools.get<Model>().emplace(std::move(model));
+        SlotKey key = pools.get<Model>().emplace(Model {
+            std::move(std::string(resourceName)),
+            std::move(scenes)
+        });
         
-        cache[std::type_index(typeid(Model))][model.name] = key;
+        cache[std::type_index(typeid(Model))][resourceName] = key;
 
         return std::move(ResourceHandle<Model>(key));
     }
@@ -333,32 +337,6 @@ namespace Engine {
 
             std::cout << "Destroying " << pool[key].name << '\n';
             cache[std::type_index(typeid(Resource))].erase(pool[key].name);
-            pool.erase(key);
-        }
-    }
-
-    template <> 
-    inline void ResourceManager::release<Image>(const SlotKey& key, const PassKey<ResourceHandle<Image>>&) {
-        auto& pool = pools.get<Image>();
-        
-        assert(key.generations == pool.getSlot(key).generations);
-        
-        if (--pool.getSlot(key).refCount == 0) {
-            pool.getSlot(key).state = ResourceState::Releasing;
-
-            std::cout << "Freeing Image GPU memory for " << pool[key].name << '\n';
-            
-            Image& image = pool[key];
-            auto device = *Core::getInstance().getDevice();
-            
-            vkDestroyImageView(device, image.view, nullptr);
-            GPUResourceManager::getInstance().unregisterResourceState<ImageState>(key);
-
-            if (image.owned)
-                GPUResourceManager::getInstance().releaseBuffer(image.image, image.allocation);
-            
-            std::cout << "Destroying Image " << image.name << '\n';
-            cache[std::type_index(typeid(Image))].erase(image.name);
             pool.erase(key);
         }
     }
@@ -393,13 +371,8 @@ namespace Engine {
         
         if (--pool.getSlot(key).refCount == 0) {
             pool.getSlot(key).state = ResourceState::Releasing;
-
-            std::cout << "Freeing Mesh GPU memory for " << pool[key].name << '\n';
             
             Mesh& m = pool[key];
-
-            GPUResourceManager::getInstance().releaseBuffer(m.vertexBuffer, m.vertexAllocation);
-            GPUResourceManager::getInstance().releaseBuffer(m.indexBuffer, m.indexAllocation);
 
             std::cout << "Destroying mesh " <<m.name << '\n';
             cache[std::type_index(typeid(Mesh))].erase(m.name);
