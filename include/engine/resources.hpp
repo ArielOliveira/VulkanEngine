@@ -141,7 +141,7 @@ namespace Engine::Resources::Trackers {
     constexpr std::array<MipSyncState, MAX_MIP_COUNT> make_state_array(const MipSyncState& value) {
         std::array<MipSyncState, MAX_MIP_COUNT> stateArr{};
 
-        for (int i = 0; i < MAX_MIP_COUNT; i++)
+        for (uint32_t i = 0; i < MAX_MIP_COUNT; i++)
             stateArr[i] = value;
         
         return stateArr;

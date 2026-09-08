@@ -8,10 +8,20 @@ using vk::raii::Queue;
 #include <runtime/application.hpp>
 using Runtime::Application;
 
+#include <engine/factory.hpp>
+
+#include <engine/resources.hpp>
+
 #include <graphics/core.hpp>
 #include <graphics/commandBuffer.hpp>
 #include <graphics/models.hpp>
 #include <graphics/pipeline.hpp>
+
+using Engine::Factory::ArrayFTY::make_null_array;
+using Engine::ResourceHandle;
+using Engine::Resources::GPU::Buffer;
+
+using Graphics::Models::MAX_FRAMES_IN_FLIGHT;
 using Graphics::Models::Particle;
 
 #include <chrono>
@@ -33,19 +43,15 @@ namespace Graphics {
             void recordComputePass(const Pipeline &pipeline, uint32_t frameIndex);
             void executeComputePass(const Semaphore &semaphore, const uint64_t &waitValue, const uint64_t &signalValue, uint32_t frameIndex);
 
-            const vector<vk::raii::Buffer>& getStorageBuffers() const;
-            const vector<vk::raii::Buffer>& getUniformBuffers() const;
+            const std::array<ResourceHandle<Buffer>, MAX_FRAMES_IN_FLIGHT>& getStorageBuffers() const;
+            const std::array<ResourceHandle<Buffer>, MAX_FRAMES_IN_FLIGHT>& getUniformBuffers() const;
 
-            const vk::raii::Buffer& getStorageBuffer(uint32_t frameIndex) const;
-            const vk::raii::Buffer& getUniformBuffer(uint32_t frameIndex) const;
+            const Buffer& getStorageBuffer(uint32_t frameIndex) const;
+            const Buffer& getUniformBuffer(uint32_t frameIndex) const;
             uint32_t getParticleCount() const;
         private:
-            vector<vk::raii::Buffer>        shaderStorageBuffers;
-            vector<vk::raii::DeviceMemory>  shaderStorageBuffersMemory;
-
-            vector<vk::raii::Buffer>        uniformBuffers;
-            vector<vk::raii::DeviceMemory>  uniformBuffersMemory;
-            vector<void*>                   uniformBuffersMapped;
+            std::array<ResourceHandle<Buffer>, MAX_FRAMES_IN_FLIGHT> shaderStorageBuffers = make_null_array<ResourceHandle<Buffer>, MAX_FRAMES_IN_FLIGHT>();
+            std::array<ResourceHandle<Buffer>, MAX_FRAMES_IN_FLIGHT> uniformBuffers       = make_null_array<ResourceHandle<Buffer>, MAX_FRAMES_IN_FLIGHT>();
             
             CommandBuffer commandBuffer = nullptr;
 

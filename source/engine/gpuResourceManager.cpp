@@ -62,9 +62,11 @@ namespace Engine {
         vmaCreateBuffer(allocator, &bufferInfo, &allocationCreateInfo, &stagingBuffer.buffer, &stagingBuffer.allocation, &stagingBuffer.allocInfo);
     }
 
-    const GPUResourceManager::ImageAllocation GPUResourceManager::allocateBuffer(const VkImageCreateInfo& createInfo) {
+    const GPUResourceManager::ImageAllocation GPUResourceManager::allocateBuffer(const VkImageCreateInfo& createInfo, const VmaAllocationCreateFlags createFlags, const VkMemoryPropertyFlags requiredFlags) {
         VmaAllocationCreateInfo allocationCreateInfo {
-            .usage = VMA_MEMORY_USAGE_AUTO
+            .flags         = createFlags,
+            .usage         = VMA_MEMORY_USAGE_AUTO,
+            .requiredFlags = requiredFlags
         };
 
         VkImage           image;
@@ -76,9 +78,11 @@ namespace Engine {
         return { std::move(image), std::move(allocation), std::move(allocationInfo) };
     }
 
-    const GPUResourceManager::BufferAllocation GPUResourceManager::allocateBuffer(const VkBufferCreateInfo& createInfo) {
+    const GPUResourceManager::BufferAllocation GPUResourceManager::allocateBuffer(const VkBufferCreateInfo& createInfo, const VmaAllocationCreateFlags createFlags, const VkMemoryPropertyFlags requiredFlags) {
         VmaAllocationCreateInfo allocationCreateInfo {
-            .usage = VMA_MEMORY_USAGE_AUTO
+            .flags         = createFlags,
+            .usage         = VMA_MEMORY_USAGE_AUTO,
+            .requiredFlags = requiredFlags
         };
         
         VkBuffer      buffer;
@@ -119,9 +123,10 @@ namespace Engine {
         });
 
         imageAllocations.emplace(key, std::move(allocation));
+        imageAllocationInfos.emplace(key, std::move(allocationInfo));
         imageStates.emplace(key, std::move(make_state_array({})));
 
-        return ResourceHandle<Image>(key);
+        return std::move(ResourceHandle<Image>(key));
     }
 
     ResourceHandle<Image> GPUResourceManager::create(const std::byte* src, const VkDeviceSize size, const ImageLayout& imageLayout, const VkImageCreateInfo& createInfo, const VkImageAspectFlags aspectMask) {
@@ -215,16 +220,32 @@ namespace Engine {
         });
 
         imageAllocations.emplace(key, std::move(allocation));
+        imageAllocationInfos.emplace(key, std::move(allocationInfo));
         imageStates.emplace(key, ImageState { 
             make_state_array({}), 
             Core::getInstance().getTransferQueueIndex() 
         });
 
-        return ResourceHandle<Image>(key);
+        return std::move(ResourceHandle<Image>(key));
     }
 
-    ResourceHandle<Buffer> GPUResourceManager::create(const std::byte* src, const VkBufferCreateInfo& createInfo) {
-        auto [buffer, allocation, allocationInfo] = allocateBuffer(createInfo);
+    ResourceHandle<Buffer> GPUResourceManager::create(const VkBufferCreateInfo& createInfo, const VmaAllocationCreateFlags createFlags, const VkMemoryPropertyFlags requiredFlags) {
+        auto [buffer, allocation, allocationInfo] = allocateBuffer(createInfo, createFlags, requiredFlags);
+
+        const SlotKey key = pool.get<Buffer>().emplace(Buffer {
+            std::move(buffer),
+            createInfo.size
+        });
+
+        bufferAllocations.emplace(key, std::move(allocation));
+        bufferAllocationInfos.emplace(key, std::move(allocationInfo));
+        bufferStates.emplace(key, std::move(BufferState{}));
+
+        return std::move(ResourceHandle<Buffer>(key));
+    }
+
+    ResourceHandle<Buffer> GPUResourceManager::create(const std::byte* src, const VkBufferCreateInfo& createInfo, const VmaAllocationCreateFlags createFlags, const VkMemoryPropertyFlags requiredFlags) {
+        auto [buffer, allocation, allocationInfo] = allocateBuffer(createInfo, createFlags, requiredFlags);
 
         VkDeviceSize written = 0;
         
@@ -246,9 +267,10 @@ namespace Engine {
         });
 
         bufferAllocations.emplace(key, std::move(allocation));
+        bufferAllocationInfos.emplace(key, std::move(allocationInfo));
         bufferStates.emplace(key, std::move(BufferState{}));
 
-        return ResourceHandle<Buffer>(key);
+        return std::move(ResourceHandle<Buffer>(key));
     }
 
     ResourceHandle<Image>  GPUResourceManager::registerExternal(const VkImage& image, const VkImageAspectFlags aspectMask, const VkFormat format,
@@ -282,7 +304,11 @@ namespace Engine {
         // Only state tracking here, since this resource is not owned
         imageStates.emplace(key, std::move(make_state_array({})));
 
-        return ResourceHandle<Image>(key);
+        return std::move(ResourceHandle<Image>(key));
+    }
+
+    void GPUResourceManager::update(const ResourceHandle<Buffer>& handle, const void* src, const size_t size) {
+        memcpy(bufferAllocationInfos[handle.key()].pMappedData, src, size);
     }
 
     void GPUResourceManager::updateState(const ResourceHandle<Image>& handle, const ImageState& newState) {

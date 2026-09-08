@@ -1,4 +1,7 @@
+#include <engine/gpuResourceManager.hpp>
 #include <graphics/tutorialParticleSystem.hpp>
+
+using Engine::GPUResourceManager;
 
 namespace Graphics {
     TutorialParticleSystem::TutorialParticleSystem(uint32_t width, uint32_t height, uint32_t particleCount) :
@@ -34,56 +37,41 @@ namespace Graphics {
     }
 
     void TutorialParticleSystem::allocateBuffers() {
-        std::array<uint32_t, 2> queueFamilyIndices = { Core::getInstance().getComputeQueueIndex(), Core::getInstance().getTransferQueueIndex() };
-        vk::DeviceSize bufferSize = sizeof(Particle) * count;
+       VkDeviceSize bufferSize = sizeof(Particle) * count;
 
-        auto [stagingBuffer, stagingBufferMemory] = Core::getInstance().createBuffer(
-            bufferSize,
-            vk::BufferUsageFlagBits::eTransferSrc,
-            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
-            vk::SharingMode::eExclusive,
-            Core::getInstance().getTransferQueueIndex(),
-            nullptr
-        );
+       VkBufferCreateInfo createInfo = {
+            .sType       = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .size        = bufferSize,
+            .usage       = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+            .sharingMode = VK_SHARING_MODE_EXCLUSIVE
+        };
 
-        void* dataStaging = stagingBufferMemory.mapMemory(0, bufferSize);
-        memcpy(dataStaging, particles.data(), (size_t)bufferSize);
-        stagingBufferMemory.unmapMemory();
-
-        for (size_t i = 0; i < Models::MAX_FRAMES_IN_FLIGHT; i++) {
-            auto [buffer, bufferMem] = Core::getInstance().createBuffer(
-                bufferSize,
-                vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
-                vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
-                Core::getInstance().hasDedicatedTransferQueue() ? vk::SharingMode::eConcurrent : vk::SharingMode::eExclusive,
-                Core::getInstance().getTransferQueueIndex(),
-                Core::getInstance().hasDedicatedTransferQueue() ? queueFamilyIndices.data()    : nullptr
+        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+            shaderStorageBuffers[i] = GPUResourceManager::getInstance().create(
+                reinterpret_cast<std::byte*>(particles.data()), 
+                createInfo,
+                {},
+                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
             );
-
-            CommandBuffer::singleTimeTransfer().copyBuffer(stagingBuffer, buffer, bufferSize).submit();
-
-            shaderStorageBuffers.emplace_back(std::move(buffer));
-            shaderStorageBuffersMemory.emplace_back(std::move(bufferMem));
         }
     }
 
     void TutorialParticleSystem::createUniformBuffers() {
-        std::array<uint32_t, 2> queueFamilyIndices = { Core::getInstance().getGraphicsQueueIndex(), Core::getInstance().getTransferQueueIndex() };
+        VkDeviceSize bufferSize = sizeof(Graphics::Models::GlobalInputs);
+
+        VkBufferCreateInfo createInfo = {
+            .sType       = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .size        = bufferSize,
+            .usage       = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            .sharingMode = VK_SHARING_MODE_EXCLUSIVE
+        };
 
         for (size_t i = 0; i < Graphics::Models::MAX_FRAMES_IN_FLIGHT; i++) {
-            vk::DeviceSize bufferSize = sizeof(Graphics::Models::GlobalInputs);
-            auto [buffer, bufferMem] = Core::getInstance().createBuffer(
-                bufferSize,
-                vk::BufferUsageFlagBits::eUniformBuffer,
-                vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
-                Core::getInstance().hasDedicatedTransferQueue() ? vk::SharingMode::eConcurrent : vk::SharingMode::eExclusive,
-                Core::getInstance().getTransferQueueIndex(),
-                Core::getInstance().hasDedicatedTransferQueue() ? queueFamilyIndices.data()    : nullptr
+            uniformBuffers[i] = GPUResourceManager::getInstance().create(
+                createInfo,
+                VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
             );
-
-            uniformBuffers.emplace_back(std::move(buffer));
-            uniformBuffersMemory.emplace_back(std::move(bufferMem));
-            uniformBuffersMapped.emplace_back(uniformBuffersMemory.back().mapMemory(0, bufferSize));
         }
     }
 
@@ -92,7 +80,7 @@ namespace Graphics {
             .deltaTime = static_cast<float>(Application::getInstance().getDeltaTime())
         };
 
-        memcpy(uniformBuffersMapped[frameIndex], &globalInputs, sizeof(Models::GlobalInputs));
+        GPUResourceManager::getInstance().update(uniformBuffers[frameIndex], &globalInputs, sizeof(globalInputs));
     }
 
     void TutorialParticleSystem::recordComputePass(const Pipeline &pipeline, uint32_t frameIndex) {
@@ -128,15 +116,15 @@ namespace Graphics {
         commandBuffer.submitOnlyAsync(computeSubmitInfo, nullptr, frameIndex);
     }
 
-    const vector<vk::raii::Buffer>& TutorialParticleSystem::getStorageBuffers() const { return shaderStorageBuffers; }
-    const vector<vk::raii::Buffer>& TutorialParticleSystem::getUniformBuffers() const { return uniformBuffers; }
+    const std::array<ResourceHandle<Buffer>, MAX_FRAMES_IN_FLIGHT>& TutorialParticleSystem::getStorageBuffers() const { return shaderStorageBuffers; }
+    const std::array<ResourceHandle<Buffer>, MAX_FRAMES_IN_FLIGHT>& TutorialParticleSystem::getUniformBuffers() const { return uniformBuffers; }
 
-    const vk::raii::Buffer& TutorialParticleSystem::getStorageBuffer(uint32_t frameIndex) const {
-        return shaderStorageBuffers[frameIndex];
+    const Buffer& TutorialParticleSystem::getStorageBuffer(uint32_t frameIndex) const {
+        return shaderStorageBuffers[frameIndex].data();
     }
 
-    const vk::raii::Buffer& TutorialParticleSystem::getUniformBuffer(uint32_t frameIndex) const {
-        return uniformBuffers[frameIndex];
+    const Buffer& TutorialParticleSystem::getUniformBuffer(uint32_t frameIndex) const {
+        return uniformBuffers[frameIndex].data();
     }
 
     uint32_t TutorialParticleSystem::getParticleCount() const { return count; }

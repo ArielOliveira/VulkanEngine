@@ -56,31 +56,34 @@ namespace Engine {
             
             ResourceHandle<Image>  create(const VkImageCreateInfo& createInfo, const VkImageAspectFlags aspectMask);
             ResourceHandle<Image>  create(const std::byte* src, const VkDeviceSize size, const ImageLayout& imageLayout,  const VkImageCreateInfo& createInfo, const VkImageAspectFlags aspectMask);
-            ResourceHandle<Buffer> create(const std::byte* src, const VkBufferCreateInfo& createInfo);
+            ResourceHandle<Buffer> create(const VkBufferCreateInfo& createInfo, const VmaAllocationCreateFlags createFlags = {}, const VkMemoryPropertyFlags requiredFlags = {});
+            ResourceHandle<Buffer> create(const std::byte* src, const VkBufferCreateInfo& createInfo, const VmaAllocationCreateFlags createFlags = {}, const VkMemoryPropertyFlags requiredFlags = {});
 
             ResourceHandle<Image>  registerExternal(const VkImage& image, const VkImageAspectFlags imageAspect, const VkFormat format,
                                                           const uint32_t width, const uint32_t height, const uint32_t depth,
                                                           const uint32_t mipCount = 1, const uint32_t layerCount = 1);
 
-            void transferQueueFamily(const ResourceHandle<Image>& key, const ImageState& newState, const CommandBuffer& src, const CommandBuffer& dst, const uint32_t srcIdx = 0, const uint32_t dstIdx = 0);
-            void transferQueueFamily(const ResourceHandle<Buffer>& key, const VkDeviceSize size, const VkDeviceSize offset, const BufferState& newState, const CommandBuffer& src, const CommandBuffer& dst, const uint32_t srcIdx = 0, const uint32_t dstIdx = 0);
+            void transferQueueFamily(const ResourceHandle<Image>& handle, const ImageState& newState, const CommandBuffer& src, const CommandBuffer& dst, const uint32_t srcIdx = 0, const uint32_t dstIdx = 0);
+            void transferQueueFamily(const ResourceHandle<Buffer>& handle, const VkDeviceSize size, const VkDeviceSize offset, const BufferState& newState, const CommandBuffer& src, const CommandBuffer& dst, const uint32_t srcIdx = 0, const uint32_t dstIdx = 0);
 
-            void clearLayout(const ResourceHandle<Image>& key);
+            void clearLayout(const ResourceHandle<Image>& handle);
             
             template <typename Resource>
-            void clearAccess(const ResourceHandle<Resource>& key);
+            void clearAccess(const ResourceHandle<Resource>& handle);
 
             template <typename Resource>
-            void clearStage(const ResourceHandle<Resource>& key);
+            void clearStage(const ResourceHandle<Resource>& handle);
 
             template <typename Resource>
-            void clearState(const ResourceHandle<Resource>& key);
+            void clearState(const ResourceHandle<Resource>& handle);
+
+            void update(const ResourceHandle<Buffer>& handle, const void* src, const size_t size);
     
-            void updateState(const ResourceHandle<Image>& key, const ImageState& newState);
-            void updateState(const ResourceHandle<Buffer>& key, const VkDeviceSize size, const VkDeviceSize offset, const BufferState& newState);
+            void updateState(const ResourceHandle<Image>& handle, const ImageState& newState);
+            void updateState(const ResourceHandle<Buffer>& handle, const VkDeviceSize size, const VkDeviceSize offset, const BufferState& newState);
             
-            void setBarrier(const ResourceHandle<Image>& key, const ImageState& newState, const CommandBuffer& commandBuffer, const uint32_t cbIdx = 0);
-            void setBarrier(const ResourceHandle<Buffer>& key, const VkDeviceSize size, const VkDeviceSize offset, const BufferState& newState, const CommandBuffer& commandBuffer, const uint32_t cbIdx = 0);
+            void setBarrier(const ResourceHandle<Image>& handle, const ImageState& newState, const CommandBuffer& commandBuffer, const uint32_t cbIdx = 0);
+            void setBarrier(const ResourceHandle<Buffer>& handle, const VkDeviceSize size, const VkDeviceSize offset, const BufferState& newState, const CommandBuffer& commandBuffer, const uint32_t cbIdx = 0);
 
             ~GPUResourceManager();
 
@@ -102,8 +105,8 @@ namespace Engine {
             void intializeAllocator();
             void createStagingBuffer();
 
-            const ImageAllocation   allocateBuffer(const VkImageCreateInfo& createInfo);
-            const BufferAllocation  allocateBuffer(const VkBufferCreateInfo& createInfo);
+            const ImageAllocation   allocateBuffer(const VkImageCreateInfo& createInfo, const VmaAllocationCreateFlags createFlags = {}, const VkMemoryPropertyFlags requiredFlags = {});
+            const BufferAllocation  allocateBuffer(const VkBufferCreateInfo& createInfo, const VmaAllocationCreateFlags createFlags = {}, const VkMemoryPropertyFlags requiredFlags = {});
 
             VmaAllocator  allocator;
             StagingBuffer stagingBuffer;
@@ -115,6 +118,9 @@ namespace Engine {
 
             SparseSet<VmaAllocation>        bufferAllocations;
             SparseSet<VmaAllocation>        imageAllocations;
+
+            SparseSet<VmaAllocationInfo>    bufferAllocationInfos;
+            SparseSet<VmaAllocationInfo>    imageAllocationInfos;
     };
 }
 

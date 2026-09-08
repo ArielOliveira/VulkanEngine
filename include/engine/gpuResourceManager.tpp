@@ -16,6 +16,7 @@ namespace Engine {
 
             bufferStates.erase(key);
             bufferAllocations.erase(key);
+            bufferAllocationInfos.erase(key);
             pool.get<Buffer>().erase(key);
         }
     }
@@ -30,6 +31,7 @@ namespace Engine {
             if (imageAllocations.contains(key)) {
                 vmaDestroyImage(allocator, pool.get<Image>()[key].image, imageAllocations[key]);
                 imageAllocations.erase(key);
+                imageAllocationInfos.erase(key);
             }
 
             imageStates.erase(key);

@@ -45,20 +45,11 @@ namespace Engine {
 
             ~ResourceManager();
 
-            //void recreate(const ResourceHandle<Image>& handle, const VkImageCreateInfo& imageCreateInfo, const VkImageAspectFlags imageAspect, const PassKey<ResourceHandle<Image>>&);
-
             template <typename Resource>
             ResourceHandle<Resource> load(const std::string& path);
 
             template <typename Resource>
             ResourceHandle<Resource> load(const std::string& sourceName, const Asset& asset, const size_t resourceIndex);
-
-            /*const ResourceHandle<Image> registerExternal(
-                const std::string& name, const VkImage& image, const VkImageAspectFlags imageAspect, const VkFormat format,
-                const uint32_t width, const uint32_t height, const uint32_t depth,
-                const uint32_t mipCount = 1, const uint32_t layerCount = 1,
-                const ImageState& state = { make_state_array({}), VK_QUEUE_FAMILY_IGNORED },
-                const VmaAllocation& allocation = VK_NULL_HANDLE);*/
 
             template <typename Resource>
             void acquire(const SlotKey& key, const PassKey<ResourceHandle<Resource>>&);

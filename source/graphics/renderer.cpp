@@ -8,8 +8,6 @@
 
 #include <engine/resourceEngine.hpp>
 
-#include <engine/factory.hpp>
-
 using Engine::ResourceManager;
 using Engine::GPUResourceManager;
 
@@ -104,22 +102,21 @@ namespace Graphics {
     }
 
     void Renderer::createUniformBuffers() {
-        std::array<uint32_t, 2> queueFamilyIndices = { Core::getInstance().getGraphicsQueueIndex(), Core::getInstance().getTransferQueueIndex() };
+        VkDeviceSize bufferSize = sizeof(Graphics::Models::UniformBufferObject);
 
-        for (size_t i = 0; i < Graphics::Models::MAX_FRAMES_IN_FLIGHT; i++) {
-            vk::DeviceSize bufferSize = sizeof(Graphics::Models::UniformBufferObject);
-            auto [buffer, bufferMem] = Core::getInstance().createBuffer(
-                bufferSize,
-                vk::BufferUsageFlagBits::eUniformBuffer,
-                vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
-                Core::getInstance().hasDedicatedTransferQueue() ? vk::SharingMode::eConcurrent : vk::SharingMode::eExclusive,
-                Core::getInstance().getTransferQueueIndex(),
-                Core::getInstance().hasDedicatedTransferQueue() ? queueFamilyIndices.data()    : nullptr
+        VkBufferCreateInfo createInfo = {
+            .sType       = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .size        = bufferSize,
+            .usage       = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            .sharingMode = VK_SHARING_MODE_EXCLUSIVE
+        };
+
+        for (size_t i = 0; i < Graphics::Models::MAX_FRAMES_IN_FLIGHT; i++) {            
+            uniformBuffers[i] = GPUResourceManager::getInstance().create(
+                createInfo,
+                VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
             );
-
-            uniformBuffers.emplace_back(std::move(buffer));
-            uniformBuffersMemory.emplace_back(std::move(bufferMem));
-            uniformBuffersMapped.emplace_back(uniformBuffersMemory.back().mapMemory(0, bufferSize));
         }
     }
 
@@ -137,7 +134,7 @@ namespace Graphics {
 
         ubo.proj[1][1] *= -1;
 
-        memcpy(uniformBuffersMapped[frameIndex], &ubo, sizeof(ubo));
+        GPUResourceManager::getInstance().update(uniformBuffers[frameIndex], &ubo, sizeof(ubo));
     }
 
     void Renderer::recordRenderPass(uint32_t imageIndex) {

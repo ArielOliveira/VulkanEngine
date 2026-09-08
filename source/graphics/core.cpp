@@ -326,26 +326,4 @@ namespace Graphics {
         debugMessenger = instance.createDebugUtilsMessengerEXT(debugUtilsMessengerCreateInfoEXT);
     }
 #endif
-
-    std::pair<vk::raii::Buffer, vk::raii::DeviceMemory> Core::createBuffer(vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, vk::SharingMode sharingMode, uint32_t queueCount, const uint32_t* queueIndices) {
-        vk::BufferCreateInfo bufferInfo {
-            .size                   = size,
-            .usage                  = usage,
-            .sharingMode            = sharingMode,
-            .queueFamilyIndexCount  = queueCount,
-            .pQueueFamilyIndices    = queueIndices
-        };
-
-        vk::raii::Buffer buffer = vk::raii::Buffer(device, bufferInfo);
-        vk::MemoryRequirements memRequirements = buffer.getMemoryRequirements();
-        vk::MemoryAllocateInfo memAllocateInfo = { 
-            .allocationSize = memRequirements.size, 
-            .memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties) 
-        };
-
-        vk::raii::DeviceMemory bufferMemory = vk::raii::DeviceMemory(device, memAllocateInfo);
-        buffer.bindMemory(*bufferMemory, 0);
-
-        return { std::move(buffer), std::move(bufferMemory) };
-    }
 }

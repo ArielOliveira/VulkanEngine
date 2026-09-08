@@ -15,7 +15,7 @@ namespace Engine {
 
             ~ResourceHandle() noexcept;
 
-            const ResourceHandle& operator=(std::nullptr_t) noexcept;
+            ResourceHandle& operator=(std::nullptr_t) noexcept;
             ResourceHandle& operator=(const ResourceHandle& rhs) = delete;
             ResourceHandle& operator=(ResourceHandle&& rhs) noexcept;
 

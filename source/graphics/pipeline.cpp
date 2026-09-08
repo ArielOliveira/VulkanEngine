@@ -519,7 +519,7 @@ namespace Graphics {
         descriptorPool = vk::raii::DescriptorPool(device, poolInfo);
     }
 
-    void Pipeline::createGraphicsDescriptorSets(const vk::raii::Device &device, const vector<vk::raii::Buffer> &uniformBuffers, const vk::DescriptorImageInfo &imageInfo) {
+    void Pipeline::createGraphicsDescriptorSets(const vk::raii::Device& device, const std::array<ResourceHandle<Buffer>, MAX_FRAMES_IN_FLIGHT>& uniformBuffers, const vk::DescriptorImageInfo& imageInfo) {
         vector<vk::DescriptorSetLayout> layouts(Models::MAX_FRAMES_IN_FLIGHT, descriptorSetLayout);
         vk::DescriptorSetAllocateInfo allocInfo {
             .descriptorPool      = descriptorPool,
@@ -531,7 +531,7 @@ namespace Graphics {
 
         for (size_t i = 0; i < Models::MAX_FRAMES_IN_FLIGHT; i++) {
             vk::DescriptorBufferInfo bufferInfo {
-                .buffer = uniformBuffers[i],
+                .buffer = uniformBuffers[i].data().buffer,
                 .offset = 0,
                 .range  = sizeof(Models::UniformBufferObject)
             };

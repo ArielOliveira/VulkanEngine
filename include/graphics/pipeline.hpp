@@ -4,6 +4,13 @@
 #include <graphics/models.hpp>
 #include <runtime/fileHelper.hpp>
 
+#include <engine/resources.hpp>
+
+using Engine::ResourceHandle;
+using Engine::Resources::GPU::Buffer;
+
+using Graphics::Models::MAX_FRAMES_IN_FLIGHT;
+
 using std::move;
 using std::swap;
 
@@ -40,7 +47,7 @@ namespace Graphics {
             void createSimpleGraphicsDescriptorSets(const vk::raii::Device &device, const vector<vk::raii::Buffer> &uniformBuffers);
 
             void createGraphicsDescriptorPool(const vk::raii::Device &device);
-            void createGraphicsDescriptorSets(const vk::raii::Device &device, const vector<vk::raii::Buffer> &uniformBuffers, const vk::DescriptorImageInfo &imageInfo);
+            void createGraphicsDescriptorSets(const vk::raii::Device& device, const std::array<ResourceHandle<Buffer>, MAX_FRAMES_IN_FLIGHT>& uniformBuffers, const vk::DescriptorImageInfo& imageInfo);
 
             void createComputeDescriptorPool(const vk::raii::Device &device);
             void createComputeDescriptorSets(const vk::raii::Device &device, const vector<vk::raii::Buffer> &uniformBuffers, const vector<vk::raii::Buffer> &shaderStorageBuffers, const uint32_t particleCount);

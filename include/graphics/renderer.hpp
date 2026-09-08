@@ -1,6 +1,8 @@
 #ifndef GRAPHICS_RENDERER_HPP
 #define GRAPHICS_RENDERER_HPP
 
+#include <vector>
+
 #include <vulkan/vulkan_raii.hpp>
 
 #include <graphics/core.hpp>
@@ -12,14 +14,17 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <engine/resources.hpp>
+#include <engine/factory.hpp>
 
 using Engine::Resources::Model;
 using Engine::Resources::Mesh;
+using Engine::Resources::GPU::Buffer;
 using Engine::Resources::GPU::Image;
 using Engine::Resources::Texture;
 using Engine::ResourceHandle;
+using Engine::Factory::ArrayFTY::make_null_array;
 
-#include <vector>
+using Graphics::Models::MAX_FRAMES_IN_FLIGHT;
 
 using std::vector;
 
@@ -52,14 +57,12 @@ namespace Graphics {
             ResourceHandle<Image> colorResolve     = nullptr;
             ResourceHandle<Image> depthBuffer      = nullptr;
 
-            TutorialParticleSystem particleSystem = nullptr;
+            TutorialParticleSystem particleSystem  = nullptr;
 
             vk::raii::Semaphore renderingSemaphore = nullptr;
             vector<vk::raii::Fence> inFlightFences;
 
-            vector<vk::raii::Buffer>       uniformBuffers;
-            vector<vk::raii::DeviceMemory> uniformBuffersMemory;
-            vector<void*>                  uniformBuffersMapped;
+            std::array<ResourceHandle<Buffer>, MAX_FRAMES_IN_FLIGHT> uniformBuffers = make_null_array<ResourceHandle<Buffer>, MAX_FRAMES_IN_FLIGHT>();
 
             ResourceHandle<Model>          model = nullptr;
             ResourceHandle<Texture> modelTexture = nullptr;

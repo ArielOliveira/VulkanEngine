@@ -25,8 +25,6 @@ namespace Graphics {
 
             ~Core();
 
-            std::pair<vk::raii::Buffer, vk::raii::DeviceMemory> createBuffer(vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, vk::SharingMode sharingMode = vk::SharingMode::eExclusive, uint32_t queueCount = 0, const uint32_t* queueIndices = nullptr);
-
             const vk::SampleCountFlagBits getMaxUsableSampleCount() const;
 
             const vk::Format findDepthFormat() const;

@@ -33,7 +33,7 @@ namespace Engine {
     }
 
     template <typename T>
-    const ResourceHandle<T>& ResourceHandle<T>::operator=(std::nullptr_t) noexcept {
+    ResourceHandle<T>& ResourceHandle<T>::operator=(std::nullptr_t) noexcept {
         if (ResourceTraits<T>::manager().template contains<T>(m_key, {}))
             ResourceTraits<T>::manager().template release<T>(m_key, {});
 

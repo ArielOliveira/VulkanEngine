@@ -17,7 +17,7 @@ namespace Utils {
     // hurting cache locality. 
     // Possible alternative: https://github.com/sporacid/slot-map/blob/main/include/spore/slot_map.hpp
     //                     : https://jakubtomsu.github.io/posts/bit_pools/
-    template <typename T, typename Slot = SlotBase, size_t PageSize = 4, bool AllowReallocation = true>
+    template <typename T, typename Slot = SlotBase, size_t PageSize = 32, bool AllowReallocation = true>
     class SlotMap {
         public:
             SlotMap();
