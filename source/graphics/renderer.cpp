@@ -32,7 +32,7 @@ namespace Graphics {
         //graphicsPipeline = Pipeline::createSimpleGraphicsPipeline(core.getDevice(), swapChain.getExtent(), swapChain.getSurfaceFormat());
         //graphicsPipeline = Pipeline::createGraphicsPipelinePointList(core.getDevice(), swapChain.getExtent(), swapChain.getSurfaceFormat(), core.findDepthFormat(), core.getMaxUsableSampleCount());
         //computePipeline  = Pipeline::createComputePipeline(core.getDevice());
-        renderPass       = CommandBuffer(core.getGraphicsCommandPool(), &core.getGraphicsQueue(), vk::CommandBufferLevel::ePrimary, Models::MAX_FRAMES_IN_FLIGHT);
+        renderPass       = CommandBuffer(core.getGraphicsCommandPool(), &core.getGraphicsQueue(), vk::CommandBufferLevel::ePrimary, Constants::MAX_FRAMES_IN_FLIGHT);
 
         auto [resolveInfo, rAspect] = createColorResolveAttachmentInfo(swapChain.getExtent().width, swapChain.getExtent().height, static_cast<VkFormat>(swapChain.getSurfaceFormat().format));
         auto [depthInfo,   dAspect] = createDepthAttachmentInfo(swapChain.getExtent().width, swapChain.getExtent().height, static_cast<VkFormat>(core.findDepthFormat()));
@@ -52,7 +52,7 @@ namespace Graphics {
 
         GPUResourceManager::getInstance().transferQueueFamily(
             modelTexture.data().image, 
-            { .currentQueueFamily = core.getGraphicsQueueIndex() }, 
+            { {}, core.getGraphicsQueueIndex() }, 
             CommandBuffer::singleTimeTransfer(), CommandBuffer::singleTimeGraphics()
         );
 
@@ -97,7 +97,7 @@ namespace Graphics {
     void Renderer::createSyncObjects() {
         assert(inFlightFences.empty());
         
-        for (size_t i = 0; i < Graphics::Models::MAX_FRAMES_IN_FLIGHT; i++) 
+        for (size_t i = 0; i < Graphics::Constants::MAX_FRAMES_IN_FLIGHT; i++) 
             inFlightFences.emplace_back(Core::getInstance().getDevice(), vk::FenceCreateInfo{});
     }
 
@@ -111,7 +111,7 @@ namespace Graphics {
             .sharingMode = VK_SHARING_MODE_EXCLUSIVE
         };
 
-        for (size_t i = 0; i < Graphics::Models::MAX_FRAMES_IN_FLIGHT; i++) {            
+        for (size_t i = 0; i < Graphics::Constants::MAX_FRAMES_IN_FLIGHT; i++) {            
             uniformBuffers[i] = GPUResourceManager::getInstance().create(
                 createInfo,
                 VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
@@ -383,7 +383,7 @@ namespace Graphics {
                 break;        // an unexpected result is returned!
 	    }
 
-        frameIndex = (frameIndex + 1) % Models::MAX_FRAMES_IN_FLIGHT;
+        frameIndex = (frameIndex + 1) % Constants::MAX_FRAMES_IN_FLIGHT;
 
     }
 }

@@ -24,7 +24,7 @@ using Engine::Resources::Texture;
 using Engine::ResourceHandle;
 using Engine::Factory::ArrayFTY::make_null_array;
 
-using Graphics::Models::MAX_FRAMES_IN_FLIGHT;
+using Graphics::Constants::MAX_FRAMES_IN_FLIGHT;
 
 using std::vector;
 

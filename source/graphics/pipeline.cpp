@@ -414,7 +414,7 @@ namespace Graphics {
     vk::raii::ShaderModule Pipeline::createShaderModule(const char* name, const vk::raii::Device &device) {
         // Create Shader Module
         string shaderAbsolutePath = Runtime::FileHelper::getExecutablePath().generic_string();
-        shaderAbsolutePath.append(Models::SHADER_RELATIVE_PATH);
+        shaderAbsolutePath.append(SHADER_RELATIVE_PATH);
         shaderAbsolutePath.append(name);
 
         auto shaderCode = Runtime::FileHelper::readFile(shaderAbsolutePath, ios::ate | ios::binary);
@@ -459,12 +459,12 @@ namespace Graphics {
 
     void Pipeline::createSimpleGraphicsDescriptorPool(const vk::raii::Device &device) {
         std::array poolSize {
-            vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, Models::MAX_FRAMES_IN_FLIGHT),
+            vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, Constants::MAX_FRAMES_IN_FLIGHT),
         };
 
         vk::DescriptorPoolCreateInfo poolInfo {
             .flags           = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
-            .maxSets         = Models::MAX_FRAMES_IN_FLIGHT,
+            .maxSets         = Constants::MAX_FRAMES_IN_FLIGHT,
             .poolSizeCount   = static_cast<uint32_t>(poolSize.size()),
             .pPoolSizes      = poolSize.data()
         };
@@ -473,7 +473,7 @@ namespace Graphics {
     }
     
     void Pipeline::createSimpleGraphicsDescriptorSets(const vk::raii::Device &device, const vector<vk::raii::Buffer> &uniformBuffers) {
-        vector<vk::DescriptorSetLayout> layouts(Models::MAX_FRAMES_IN_FLIGHT, descriptorSetLayout);
+        vector<vk::DescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, descriptorSetLayout);
         
         vk::DescriptorSetAllocateInfo allocInfo {
             .descriptorPool      = descriptorPool,
@@ -483,7 +483,7 @@ namespace Graphics {
 
         descriptorSets = device.allocateDescriptorSets(allocInfo);
 
-        for (size_t i = 0; i < Models::MAX_FRAMES_IN_FLIGHT; i++) {
+        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
             vk::DescriptorBufferInfo bufferInfo {
                 .buffer = uniformBuffers[i],
                 .offset = 0,
@@ -505,13 +505,13 @@ namespace Graphics {
 
     void Pipeline::createGraphicsDescriptorPool(const vk::raii::Device &device) {
         std::array poolSize {
-            vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, Models::MAX_FRAMES_IN_FLIGHT),
-            vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, Models::MAX_FRAMES_IN_FLIGHT)
+            vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, MAX_FRAMES_IN_FLIGHT),
+            vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, MAX_FRAMES_IN_FLIGHT)
         };
 
         vk::DescriptorPoolCreateInfo poolInfo {
             .flags           = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
-            .maxSets         = Models::MAX_FRAMES_IN_FLIGHT,
+            .maxSets         = MAX_FRAMES_IN_FLIGHT,
             .poolSizeCount   = static_cast<uint32_t>(poolSize.size()),
             .pPoolSizes      = poolSize.data()
         };
@@ -520,7 +520,7 @@ namespace Graphics {
     }
 
     void Pipeline::createGraphicsDescriptorSets(const vk::raii::Device& device, const std::array<ResourceHandle<Buffer>, MAX_FRAMES_IN_FLIGHT>& uniformBuffers, const vk::DescriptorImageInfo& imageInfo) {
-        vector<vk::DescriptorSetLayout> layouts(Models::MAX_FRAMES_IN_FLIGHT, descriptorSetLayout);
+        vector<vk::DescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, descriptorSetLayout);
         vk::DescriptorSetAllocateInfo allocInfo {
             .descriptorPool      = descriptorPool,
             .descriptorSetCount  = static_cast<uint32_t>(layouts.size()),
@@ -529,7 +529,7 @@ namespace Graphics {
 
         descriptorSets = device.allocateDescriptorSets(allocInfo);
 
-        for (size_t i = 0; i < Models::MAX_FRAMES_IN_FLIGHT; i++) {
+        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
             vk::DescriptorBufferInfo bufferInfo {
                 .buffer = uniformBuffers[i].data().buffer,
                 .offset = 0,
@@ -558,13 +558,13 @@ namespace Graphics {
 
     void Pipeline::createComputeDescriptorPool(const vk::raii::Device &device) {
         std::array poolSize {
-            vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, Models::MAX_FRAMES_IN_FLIGHT),
-            vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, Models::MAX_FRAMES_IN_FLIGHT * 2)
+            vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, MAX_FRAMES_IN_FLIGHT),
+            vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, MAX_FRAMES_IN_FLIGHT * 2)
         };
 
         vk::DescriptorPoolCreateInfo poolInfo {
             .flags           = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
-            .maxSets         = Models::MAX_FRAMES_IN_FLIGHT,
+            .maxSets         = MAX_FRAMES_IN_FLIGHT,
             .poolSizeCount   = static_cast<uint32_t>(poolSize.size()),
             .pPoolSizes      = poolSize.data()
         };
@@ -573,7 +573,7 @@ namespace Graphics {
     }
 
     void Pipeline::createComputeDescriptorSets(const vk::raii::Device &device, const vector<vk::raii::Buffer> &uniformBuffers, const vector<vk::raii::Buffer> &shaderStorageBuffers, const uint32_t particleCount) {
-        vector<vk::DescriptorSetLayout> layouts (Models::MAX_FRAMES_IN_FLIGHT, descriptorSetLayout);
+        vector<vk::DescriptorSetLayout> layouts (MAX_FRAMES_IN_FLIGHT, descriptorSetLayout);
         vk::DescriptorSetAllocateInfo allocInfo {
             .descriptorPool     = *descriptorPool,
             .descriptorSetCount = static_cast<uint32_t>(layouts.size()),
@@ -582,11 +582,11 @@ namespace Graphics {
 
         descriptorSets = device.allocateDescriptorSets(allocInfo);
 
-        for (size_t i = 0; i < Models::MAX_FRAMES_IN_FLIGHT; i++) {
+        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
             
             vk::DescriptorBufferInfo bufferInfo(uniformBuffers[i], 0, sizeof(Models::GlobalInputs));
             
-            vk::DescriptorBufferInfo storageBufferInfoLastFrame(shaderStorageBuffers[(i-1) % Models::MAX_FRAMES_IN_FLIGHT], 0, sizeof(Models::Particle) * particleCount);
+            vk::DescriptorBufferInfo storageBufferInfoLastFrame(shaderStorageBuffers[(i-1) % MAX_FRAMES_IN_FLIGHT], 0, sizeof(Models::Particle) * particleCount);
             vk::DescriptorBufferInfo storageBufferInfoCurrentFrame(shaderStorageBuffers[i], 0, sizeof(Models::Particle) * particleCount);
             
             std::array<vk::WriteDescriptorSet, 3> descriptorWrites {{

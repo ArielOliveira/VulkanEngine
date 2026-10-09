@@ -17,12 +17,14 @@
 
 using std::array;
 
-namespace Graphics::Models {
-    constexpr int MAX_FRAMES_IN_FLIGHT = 2;
+namespace Graphics::Constants {
+    constexpr int MAX_FRAMES_IN_FLIGHT      = 2;
     const std::string MODEL_PATH            = "models/viking_room.obj";
     const std::string TEXTURE_PATH          = "textures/";
     const std::string SHADER_RELATIVE_PATH  = "./spirv/";
+}
 
+namespace Graphics::Models {
     struct Vertex {
         glm::vec3 pos;
         glm::vec3 color;

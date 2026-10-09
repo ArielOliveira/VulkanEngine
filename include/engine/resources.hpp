@@ -118,10 +118,10 @@ namespace Engine::Resources::Trackers {
     constexpr uint8_t MAX_MIP_COUNT = 16;
 
     struct BufferState {
-        vk::PipelineStageFlags2 currentStage;
-        vk::AccessFlags2        currentAccess;
+        vk::PipelineStageFlags2 stage;
+        vk::AccessFlags2        access;
 
-        uint32_t currentQueueFamily = ~0U;
+        uint32_t queueFamilyIndex = ~0U;
     };
 
     struct MipSyncState {
@@ -135,7 +135,7 @@ namespace Engine::Resources::Trackers {
     struct ImageState {
         std::array<MipSyncState, MAX_MIP_COUNT> states;
         
-        uint32_t currentQueueFamily = VK_QUEUE_FAMILY_IGNORED;
+        uint32_t queueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     };
 
     constexpr std::array<MipSyncState, MAX_MIP_COUNT> make_state_array(const MipSyncState& value) {

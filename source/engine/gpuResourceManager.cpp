@@ -362,8 +362,8 @@ namespace Engine {
         auto& buffers = pool.get<Buffer>();
 
         vk::BufferMemoryBarrier2 barrier {
-            .srcStageMask = bufferStates[handle.key()].currentStage, .srcAccessMask = bufferStates[handle.key()].currentAccess,
-            .dstStageMask = newState.currentStage,          .dstAccessMask = newState.currentAccess,
+            .srcStageMask = bufferStates[handle.key()].stage, .srcAccessMask = bufferStates[handle.key()].access,
+            .dstStageMask = newState.stage,          .dstAccessMask = newState.access,
             .buffer = buffers[handle.key()].buffer, .offset = offset, .size = size
         };
 
@@ -381,9 +381,9 @@ namespace Engine {
 
         auto& images = pool.get<Image>();
 
-        assert(imageStates[handle.key()].currentQueueFamily != VK_QUEUE_FAMILY_IGNORED &&
-               newState.currentQueueFamily         != VK_QUEUE_FAMILY_IGNORED &&
-               imageStates[handle.key()].currentQueueFamily != newState.currentQueueFamily);
+        assert(imageStates[handle.key()].queueFamilyIndex != VK_QUEUE_FAMILY_IGNORED &&
+               newState.queueFamilyIndex                  != VK_QUEUE_FAMILY_IGNORED &&
+               imageStates[handle.key()].queueFamilyIndex != newState.queueFamilyIndex);
 
         vk::ImageMemoryBarrier2 barrier {
             .image                  = images[handle.key()].image,
@@ -396,7 +396,7 @@ namespace Engine {
             .pImageMemoryBarriers    = &barrier
         };
 
-        if (imageStates[handle.key()].currentQueueFamily != newState.currentQueueFamily) {
+        if (imageStates[handle.key()].queueFamilyIndex != newState.queueFamilyIndex) {
             barrier.subresourceRange.levelCount = images[handle.key()].mipCount;
             barrier.subresourceRange.layerCount = images[handle.key()].layers;
 
@@ -417,14 +417,14 @@ namespace Engine {
 
         auto& buffers = pool.get<Buffer>();
 
-        assert(bufferStates[handle.key()].currentQueueFamily != VK_QUEUE_FAMILY_IGNORED &&
-               newState.currentQueueFamily                   != VK_QUEUE_FAMILY_IGNORED &&
-               bufferStates[handle.key()].currentQueueFamily != newState.currentQueueFamily);
+        assert(bufferStates[handle.key()].queueFamilyIndex != VK_QUEUE_FAMILY_IGNORED &&
+               newState.queueFamilyIndex                   != VK_QUEUE_FAMILY_IGNORED &&
+               bufferStates[handle.key()].queueFamilyIndex != newState.queueFamilyIndex);
 
         vk::BufferMemoryBarrier2 barrier {
-            .srcStageMask = bufferStates[handle.key()].currentStage, .srcAccessMask = bufferStates[handle.key()].currentAccess,
-            .dstStageMask = bufferStates[handle.key()].currentStage, .dstAccessMask = bufferStates[handle.key()].currentAccess,
-            .srcQueueFamilyIndex = bufferStates[handle.key()].currentQueueFamily, .dstQueueFamilyIndex = newState.currentQueueFamily,
+            .srcStageMask = bufferStates[handle.key()].stage, .srcAccessMask = bufferStates[handle.key()].access,
+            .dstStageMask = bufferStates[handle.key()].stage, .dstAccessMask = bufferStates[handle.key()].access,
+            .srcQueueFamilyIndex = bufferStates[handle.key()].queueFamilyIndex, .dstQueueFamilyIndex = newState.queueFamilyIndex,
             .buffer = buffers[handle.key()].buffer, .offset = offset, .size = size
         };
 

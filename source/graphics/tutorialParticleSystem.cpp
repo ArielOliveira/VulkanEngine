@@ -27,7 +27,7 @@ namespace Graphics {
         allocateBuffers();
         createUniformBuffers();
 
-        commandBuffer = CommandBuffer(Core::getInstance().getComputeCommandPool(), &Core::getInstance().getComputeQueue(), vk::CommandBufferLevel::ePrimary, Models::MAX_FRAMES_IN_FLIGHT);
+        commandBuffer = CommandBuffer(Core::getInstance().getComputeCommandPool(), &Core::getInstance().getComputeQueue(), vk::CommandBufferLevel::ePrimary, MAX_FRAMES_IN_FLIGHT);
     }
 
     TutorialParticleSystem::TutorialParticleSystem(std::nullptr_t) noexcept {}
@@ -66,7 +66,7 @@ namespace Graphics {
             .sharingMode = VK_SHARING_MODE_EXCLUSIVE
         };
 
-        for (size_t i = 0; i < Graphics::Models::MAX_FRAMES_IN_FLIGHT; i++) {
+        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
             uniformBuffers[i] = GPUResourceManager::getInstance().create(
                 createInfo,
                 VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,

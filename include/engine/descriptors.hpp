@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <vector>
+#include <string>
 
 namespace Engine::Descriptors {
     struct ImageMipLayout {

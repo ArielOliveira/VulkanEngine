@@ -21,7 +21,7 @@ using Engine::Factory::ArrayFTY::make_null_array;
 using Engine::ResourceHandle;
 using Engine::Resources::GPU::Buffer;
 
-using Graphics::Models::MAX_FRAMES_IN_FLIGHT;
+using Graphics::Constants::MAX_FRAMES_IN_FLIGHT;
 using Graphics::Models::Particle;
 
 #include <chrono>

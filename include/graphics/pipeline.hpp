@@ -9,7 +9,8 @@
 using Engine::ResourceHandle;
 using Engine::Resources::GPU::Buffer;
 
-using Graphics::Models::MAX_FRAMES_IN_FLIGHT;
+using Graphics::Constants::MAX_FRAMES_IN_FLIGHT;
+using Graphics::Constants::SHADER_RELATIVE_PATH;
 
 using std::move;
 using std::swap;

@@ -24,9 +24,6 @@ namespace Engine {
 
             const T& data() const;
             
-            /*template <typename... Args>
-            void recreate(Args&&... args);*/
-
         private:
             static constexpr SlotKey null_key = { ~0U, ~0U };
 
