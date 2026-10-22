@@ -1,5 +1,5 @@
 # VulkanEngine
-A basic Vulkan Renderer for the purposes of learning low level graphics.
+A basic Vulkan Renderer for the purposes of learning low level graphics APIs.
 
 <img src="./demo/DemoBasics.gif" width="350" height="180" /> <img src="./demo/ComputeShader.gif" width="350" height="180" />
 
