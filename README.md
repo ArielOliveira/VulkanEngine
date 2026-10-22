@@ -4,7 +4,7 @@ A basic Vulkan Renderer for the purposes of learning low level graphics.
 <img src="./demo/DemoBasics.gif" width="350" height="180" /> <img src="./demo/ComputeShader.gif" width="350" height="180" />
 
 # Goals
-- ~~ Understand Vulkan rendering basics ~~
+- ~~Understand Vulkan rendering basics~~
 - Implement a render graph
 - Implement a deferred rendering pipeline
 - Implement a forward rendering pipeline
