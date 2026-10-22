@@ -74,8 +74,6 @@ namespace Graphics {
     inline const std::vector<resource_index>& RenderPass::getOutputs<BufferInfo>() const {
         return std::get<ResourceType::Buffer>(outputs);
     }
-
-
 }
 
 #endif

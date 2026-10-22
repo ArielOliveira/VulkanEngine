@@ -99,9 +99,9 @@ namespace Graphics {
             template <typename ResourceType>
             const std::vector<resource_index>& getOutputs() const; 
         private:
-            const std::string name;
+            const std::string  name;
             const RenderGraph& graph;
-            const pass_index index;
+            const pass_index   index;
 
             std::tuple<attachment_list, buffer_list> inputs;
             std::tuple<attachment_list, buffer_list> outputs;
@@ -150,7 +150,8 @@ namespace Graphics {
             template <typename ResourceType>
             NameToIndexMap& getMap(); 
 
-            void sortDependencies();
+            std::tuple<std::vector<std::unordered_set<pass_index>>, 
+                       std::vector<std::unordered_set<pass_index>>> sortDependencies();
     };
 }
 

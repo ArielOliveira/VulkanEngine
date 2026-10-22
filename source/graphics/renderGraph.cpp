@@ -14,7 +14,8 @@ namespace Graphics {
         return declaredPasses[declaredPasses.size()-1];
     }
 
-    void RenderGraph::sortDependencies() {
+    std::tuple<std::vector<std::unordered_set<pass_index>>, 
+               std::vector<std::unordered_set<pass_index>>> RenderGraph::sortDependencies() {
         std::vector<std::unordered_set<pass_index>> dependencies(declaredPasses.size()); // What each pass depends on
         std::vector<std::unordered_set<pass_index>> dependents(declaredPasses.size());   // What depends on each pass
 
@@ -83,7 +84,7 @@ namespace Graphics {
                 visit(i);
         }
 
-        // step 3 - longest path using DFS topological order
+        // step 3 - longest path using the resulting DFS topological order
         passDependencyLevel.clear();
         passDependencyLevel.resize(declaredPasses.size(), 0);
         for (auto pass : executionOrder) {
@@ -92,12 +93,14 @@ namespace Graphics {
                     std::max(passDependencyLevel[dependency], (uint8_t)(passDependencyLevel[pass] + 1U));
             }
         }
+
+        return { std::move(dependencies), std::move(dependents) };
     }
 
     void RenderGraph::compile() {
-        sortDependencies();
+        auto [dependencies, dependents] = sortDependencies();
         
-
+        
     }
 
     void RenderGraph::build() {}
